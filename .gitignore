@@ -1,0 +1,4 @@
+train_log
+src/model
+.idea
+*__pycache__*

@@ -6,9 +6,9 @@ import torch.nn.functional as F
 
 
 class FCN(nn.Module):
-    def __init__(self, state_dict_path=None):
+    def __init__(self, n_params, state_dict_path=None):
         super(FCN, self).__init__()
-        self.fc1 = (nn.Linear(10, 512))
+        self.fc1 = (nn.Linear(n_params, 512))
         self.fc2 = (nn.Linear(512, 1024))
         self.fc3 = (nn.Linear(1024, 2048))
         self.fc4 = (nn.Linear(2048, 4096))
@@ -20,7 +20,7 @@ class FCN(nn.Module):
         self.conv6 = (nn.Conv2d(8, 4, 3, 1, 1))
         self.pixel_shuffle = nn.PixelShuffle(2)
 
-        if os.path.exists(state_dict_path):
+        if state_dict_path is not None and os.path.exists(state_dict_path):
             self.load_state_dict(torch.load(state_dict_path))
 
     def forward(self, x):
@@ -37,3 +37,9 @@ class FCN(nn.Module):
         x = self.pixel_shuffle(self.conv6(x))
         x = torch.sigmoid(x)
         return 1 - x.view(-1, 128, 128)
+
+
+class ShapeRenderer(nn.Module):
+    """
+
+    """

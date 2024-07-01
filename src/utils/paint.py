@@ -1,5 +1,12 @@
+import random
+
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+
+
+def normal(x, width):
+    return (int)(x * (width - 1) + 0.5)
 
 
 def paint_stroke(f, width=128):
@@ -12,8 +19,6 @@ def paint_stroke(f, width=128):
     :param width: canvas width in pixel
     :return: drawn image of shape (width, width)
     """
-    def normal(x, width):
-        return (int)(x * (width - 1) + 0.5)
     x0, y0, x1, y1, x2, y2, z0, z2, w0, w2 = f
     x1 = x0 + (x2 - x0) * x1
     y1 = y0 + (y2 - y0) * y1
@@ -25,7 +30,7 @@ def paint_stroke(f, width=128):
     y2 = normal(y2, width * 2)
     z0 = (int)(1 + z0 * width // 2)
     z2 = (int)(1 + z2 * width // 2)
-    canvas = np.zeros([width * 2, width * 2]).astype('float32')
+    canvas = np.zeros([width * 2, width * 2]).astype(float)
     tmp = 1. / 100
     for i in range(100):
         t = i * tmp
@@ -58,3 +63,73 @@ def paint_strokes(strokes, canvas, renderer):
     for i in range(5):
         canvas = canvas * (1 - stroke[:, i]) + color_stroke[:, i]
     return canvas
+
+
+def paint_polygon(polygon, width=128):
+    points = polygon.reshape(-1, 2)
+    centroid = np.mean(points, axis=0)
+
+    # Sort the points based on their angle relative to the centroid
+    angles = np.arctan2(points[:, 1] - centroid[1], points[:, 0] - centroid[0])
+    sorted_points = (points[np.argsort(angles)] * width * 2).astype(int)
+    # sorted_points = np.clip(sorted_points, a_min=0, a_max=width * 2)
+
+    # draw the polygon on image
+    canvas = np.zeros([width * 2, width * 2], dtype=float)
+    cv2.fillPoly(canvas, [sorted_points], color=1)
+    return cv2.resize(canvas, dsize=(width, width))
+
+
+def paint_polygons(polygons, width=128):
+    canvas = np.zeros([width, width, 3], dtype=float)
+    for polygon in polygons:
+        mask = paint_polygon(polygon[:-3], width).astype(bool)
+        canvas[mask] = polygon[-3:]
+    cv2.imshow('img', canvas)
+    cv2.waitKey()
+    return canvas
+
+
+def generate_random_polygon(num_points=None, width=128):
+    if num_points is None:
+        num_points = random.randint(3, 6)
+    points = (np.random.rand(num_points, 2) - 0.5) * 2
+    centroid = np.mean(points, axis=0)
+    color = np.random.rand(3)
+
+    # Sort the points based on their angle relative to the centroid
+    angles = np.arctan2(points[:, 1] - centroid[1], points[:, 0] - centroid[0])
+    sorted_points = (points[np.argsort(angles)] * width).astype(int) + width // 2
+    sorted_points = np.clip(sorted_points, a_min=0, a_max=width)
+    param = sorted_points.reshape(-1)
+
+    # draw the polygon on image
+    mask = np.zeros([width, width], dtype=float)
+    cv2.fillPoly(mask, [sorted_points], color=1)
+    canvas = mask[..., None] * color.reshape(1, 1, 3)
+    # cv2.imshow('img', canvas)
+    # cv2.waitKey()
+    return param, canvas
+
+
+def generate_random_circle(width=128):
+    param = np.random.randint(0, width, 3)
+    color = np.random.randint(0, width, 3)
+    canvas = np.zeros([width, width])
+    cv2.circle(canvas, param[:2], (param[2] * width), color)
+    return param, canvas
+
+
+def plot_polygon(points):
+    plt.figure()
+    plt.fill(points[:, 0], points[:, 1], 'b-', alpha=0.3)  # Fill the polygon
+    plt.plot(points[:, 0], points[:, 1], 'ro')  # Plot the vertices
+    plt.plot(np.append(points[:, 0], points[0, 0]), np.append(points[:, 1], points[0, 1]),
+             'b-')  # Connect the vertices
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.show()
+
+
+if __name__=="__main__":
+    for i in range(10):
+        generate_random_polygon()

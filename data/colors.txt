@@ -1,0 +1,92 @@
+Type in the info of the color0 (0, 0, 4):
+Layer:4
+Type in the info of the color1 (0, 0, 23):
+Layer:4
+Type in the info of the color2 (0, 15, 0):
+Layer:4
+Type in the info of the color3 (0, 16, 27):
+Layer:4
+Type in the info of the color4 (0, 26, 24):
+Layer:3
+Type in the info of the color5 (0, 177, 249):
+Layer:3
+Type in the info of the color6 (0, 236, 254):
+Layer:3
+Type in the info of the color7 (1, 20, 10):
+Layer:4
+Type in the info of the color8 (2, 13, 28):
+Layer:4
+Type in the info of the color9 (2, 18, 0):
+Layer:4
+Type in the info of the color10 (3, 14, 52):
+Layer:4
+Type in the info of the color11 (11, 19, 0):
+Layer:4
+Type in the info of the color12 (14, 0, 226):
+Layer:1
+Type in the info of the color13 (15, 23, 19):
+Layer:4
+Type in the info of the color14 (19, 24, 25):
+Layer:4
+Type in the info of the color15 (23, 25, 25):
+Layer:3
+Type in the info of the color16 (24, 20, 8):
+Layer:4
+Type in the info of the color17 (27, 7, 0):
+Layer:4
+Type in the info of the color18 (30, 34, 94):
+Layer:3
+Type in the info of the color19 (40, 42, 112):
+Layer:3
+Type in the info of the color20 (62, 149, 0):
+Layer:4
+Type in the info of the color21 (63, 98, 89):
+Layer:3
+Type in the info of the color22 (67, 87, 165):
+Layer:3
+Type in the info of the color23 (75, 87, 113):
+Layer:3
+Type in the info of the color24 (77, 30, 162):
+Layer:3
+Type in the info of the color25 (82, 104, 198):
+Layer:3
+Type in the info of the color26 (86, 97, 72):
+Layer:3
+Type in the info of the color27 (96, 109, 105):
+Layer:1
+Type in the info of the color28 (99, 27, 163):
+Layer:3
+Type in the info of the color29 (105, 11, 135):
+Layer:3
+Type in the info of the color30 (106, 115, 116):
+Layer:2
+Type in the info of the color31 (108, 25, 163):
+Layer:3
+Type in the info of the color32 (115, 116, 116):
+Layer:1
+Type in the info of the color33 (118, 22, 163):
+Layer:3
+Type in the info of the color34 (127, 19, 163):
+Layer:3
+Type in the info of the color35 (137, 211, 198):
+Layer:1
+Type in the info of the color36 (139, 192, 121):
+Layer:3
+Type in the info of the color37 (164, 187, 247):
+Layer:1
+Type in the info of the color38 (186, 210, 161):
+Layer:1
+Type in the info of the color39 (203, 224, 230):
+Layer:1
+Type in the info of the color40 (211, 211, 210):
+Layer:1
+Type in the info of the color41 (211, 239, 231):
+Layer:1
+Type in the info of the color42 (226, 157, 0):
+Layer:3
+Type in the info of the color43 (233, 252, 254):
+Layer:0
+Type in the info of the color44 (249, 228, 191):
+Layer:1
+Type in the info of the color45 (254, 254, 254):
+Layer:1

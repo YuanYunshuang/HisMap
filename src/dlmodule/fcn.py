@@ -103,8 +103,8 @@ class ShapeRenderer(nn.Module):
         x = self.conv3(x)
         x = x.sigmoid()
 
-        x = x + color_emb.view(B * N, -1, 1, 1)
-        x = x.view(B, N, -1, 128, 128) + self.order_emb.view(1, 1, -1, 1, 1)
-        x = self.out_layer(x.max(1).values)
+        order_emb = self.order_emb.weight.unsqueeze(0).repeat(B, 1, 1).view(B * N, 128, 1, 1)
+        x = x + color_emb.view(B * N, -1, 1, 1) + order_emb
+        x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
 
         return x

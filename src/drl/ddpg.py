@@ -191,3 +191,4 @@ class DDPG(nn.Module):
 
     def gan_reward(self, fake_data, real_data):
         return self.wgan_target(torch.cat([real_data, fake_data], 1))
+

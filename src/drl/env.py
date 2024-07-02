@@ -29,7 +29,8 @@ class Environment:
             x = random.randint(0, self.xmax)
             y = random.randint(0, self.ymax)
             gt.append(self.hismap[x:x+self.img_width, y:y+self.img_width])
-        self.gt = torch.from_numpy(np.stack(gt, axis=0)).permute(0, 3, 1, 2).to(self.device)
+        gt = np.array(np.stack(gt, axis=0))
+        self.gt = torch.from_numpy(gt).permute(0, 3, 1, 2).to(self.device)
         self.tot_reward = ((self.gt.float() / 255) ** 2).mean((1, 2, 3))
         self.stepnum = 0
         self.canvas = torch.zeros([self.batch_size, 3, self.img_width, self.img_width],
@@ -82,17 +83,20 @@ class FastEnv():
         self.log = 0
 
     def save_image(self, log, step):
-        for i in range(self.env_batch):
-            if self.env.imgid[i] <= 10:
-                canvas = cv2.cvtColor((to_numpy(self.env.canvas[i].permute(1, 2, 0))), cv2.COLOR_BGR2RGB)
-                self.writer.add_image('{}/canvas_{}.png'.format(str(self.env.imgid[i]), str(step)), canvas, log)
-        if step == self.max_episode_length:
-            for i in range(self.env_batch):
-                if self.env.imgid[i] < 50:
-                    gt = cv2.cvtColor((to_numpy(self.env.gt[i].permute(1, 2, 0))), cv2.COLOR_BGR2RGB)
-                    canvas = cv2.cvtColor((to_numpy(self.env.canvas[i].permute(1, 2, 0))), cv2.COLOR_BGR2RGB)
-                    self.writer.add_image(str(self.env.imgid[i]) + '/_target.png', gt, log)
-                    self.writer.add_image(str(self.env.imgid[i]) + '/_canvas.png', canvas, log)
+        for i in range(0, self.env_batch, 20):
+            canvas_gt = torch.cat([
+                self.env.canvas[i],
+                self.env.gt[i]
+            ], dim=-1).detach().cpu().numpy()
+            # canvas_gt = cv2.cvtColor(canvas_gt, cv2.COLOR_BGR2RGB)
+            self.writer.add_image(f'{i}/canvas_gt_{step}.png', canvas_gt, log)
+        # if step == self.max_episode_length:
+        #     for i in range(self.env_batch):
+        #         if self.env.imgid[i] < 50:
+        #             gt = cv2.cvtColor((to_numpy(self.env.gt[i].permute(1, 2, 0))), cv2.COLOR_BGR2RGB)
+        #             canvas = cv2.cvtColor((to_numpy(self.env.canvas[i].permute(1, 2, 0))), cv2.COLOR_BGR2RGB)
+        #             self.writer.add_image(str(self.env.imgid[i]) + '/_target.png', gt, log)
+        #             self.writer.add_image(str(self.env.imgid[i]) + '/_canvas.png', canvas, log)
 
     def step(self, action):
         with torch.no_grad():

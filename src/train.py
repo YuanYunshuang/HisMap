@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import random
+import sys
+
 import numpy as np
 import argparse
 import time
@@ -38,14 +40,18 @@ def train(agent, env, evaluate):
             if step > args.warmup:
                 # [optional] evaluate
                 if episode > 0 and args.validate_interval > 0 and episode % args.validate_interval == 0:
-                    reward, dist = evaluate(env, agent.select_action, debug=args.debug)
-                    if args.debug: prRed('Step_{:07d}: mean_reward:{:.3f} mean_dist:{:.3f} var_dist:{:.3f}'.format(
-                        step - 1, np.mean(reward), np.mean(dist),np.var(dist))
+                    reward, dist = evaluate(env, agent.act, debug=args.debug)
+                    mean_reward = reward.mean().item()
+                    mean_dist = dist.mean().item()
+                    var_dist = dist.var().item()
+                    if args.debug: prRed(
+                        f'Step_{step - 1:07d}: mean_reward:{mean_reward:.3f} '
+                        f'mean_dist:{mean_dist:.3f} var_dist:{var_dist:.3f}'
                     )
-                    writer.add_scalar('validate/mean_reward', np.mean(reward), step)
-                    writer.add_scalar('validate/mean_dist', np.mean(dist), step)
-                    writer.add_scalar('validate/var_dist', np.var(dist), step)
-                    agent.save_model(args.output)
+                    writer.add_scalar('validate/mean_reward', mean_reward, step)
+                    writer.add_scalar('validate/mean_dist', mean_dist, step)
+                    writer.add_scalar('validate/var_dist', var_dist, step)
+                    torch.save(agent.state_dict(), f'{args.output}/ddpg.pth')
             train_time_interval = time.time() - time_stamp
             time_stamp = time.time()
             tot_Q = 0.
@@ -65,8 +71,13 @@ def train(agent, env, evaluate):
                 writer.add_scalar('train/actor_lr', lr[1], step)
                 writer.add_scalar('train/Q', tot_Q / args.episode_train_times, step)
                 writer.add_scalar('train/critic_loss', tot_value_loss / args.episode_train_times, step)
-            if args.debug: prBlack('#{}: steps:{} interval_time:{:.2f} train_time:{:.2f}' \
-                              .format(episode, step, train_time_interval, time.time() - time_stamp))
+            if args.debug:
+                ss = f'#{episode}: steps:{step} interval_time:{train_time_interval:.2f} '\
+                     f'train_time:{time.time() - time_stamp:.2f}'
+                sys.stdout.write("\r" + " " * len(ss) + "\r")  # Overwrite with spaces
+                sys.stdout.flush()
+                sys.stdout.write(ss)
+                sys.stdout.flush()
             time_stamp = time.time()
             # reset
             observation = None
@@ -93,8 +104,8 @@ if __name__ == "__main__":
                         help='how many episode to perform during validation')
     parser.add_argument('--train_steps', default=2000000, type=int, help='total train steps')
     parser.add_argument('--episode_train_times', default=10, type=int, help='train times for each episode')
-    parser.add_argument('--data_path', default='/code/HisMapPainter/data/3922_2017.tif', type=str, help='data path')
-    parser.add_argument('--render_path', default='/code/HisMapPainter/render.pkl', type=str, help='data path')
+    parser.add_argument('--data_path', default='../data/3922_2017.tif', type=str, help='data path')
+    parser.add_argument('--render_path', default='../data/render.pkl', type=str, help='data path')
     parser.add_argument('--resume', default=None, type=str, help='Resuming model path for testing')
     parser.add_argument('--output', default='./model', type=str, help='Resuming model path for testing')
     parser.add_argument('--debug', dest='debug', action='store_true', help='print some info')

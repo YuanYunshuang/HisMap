@@ -44,7 +44,7 @@ def load_weights():
 
 
 load_weights()
-while step < 500000:
+while step < 100000:
     net.train()
     train_batch = []
     ground_truth = []
@@ -65,9 +65,9 @@ while step < 500000:
     loss.backward()
     optimizer.step()
 
-    if step < 200000:
+    if step < 40000:
         lr = 1e-4
-    elif step < 400000:
+    elif step < 80000:
         lr = 1e-5
     else:
         lr = 1e-6

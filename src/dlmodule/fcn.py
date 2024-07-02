@@ -77,8 +77,8 @@ class ShapeRenderer(nn.Module):
         self.conv2 = conv_block(8, 16)
         self.conv3 = conv_block(4, 4)
 
-        self.color_encoder = linear_layer(3, 128)
-        self.order_emb = nn.Embedding(5, 128)
+        self.color_encoder = linear_layer(3, 64)
+        self.order_emb = nn.Embedding(5, 64)
         self.out_layer = nn.Sequential(
             nn.Conv2d(128, 64, 3, padding=1),
             nn.ReLU(),
@@ -103,8 +103,8 @@ class ShapeRenderer(nn.Module):
         x = self.conv3(x)
         x = x.sigmoid()
 
-        order_emb = self.order_emb.weight.unsqueeze(0).repeat(B, 1, 1).view(B * N, 128, 1, 1)
-        x = x + color_emb.view(B * N, -1, 1, 1) + order_emb
+        order_emb = self.order_emb.weight.unsqueeze(0).repeat(B, 1, 1).view(B * N, 64, 1, 1)
+        x = x + torch.cat([color_emb.view(B * N, -1, 1, 1), order_emb], dim=1)
         x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
 
         return x

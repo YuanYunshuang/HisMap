@@ -79,9 +79,13 @@ class ShapeRenderer(nn.Module):
 
         self.color_encoder = linear_layer(3, 64)
         self.order_emb = nn.Embedding(5, 64)
-        self.out_layer = nn.Sequential(
+        self.blend_layer = nn.Sequential(
+            nn.Conv2d(128, 128, 3, padding=1),
+            nn.ReLU(),
             nn.Conv2d(128, 64, 3, padding=1),
             nn.ReLU(),
+        )
+        self.out_layer = nn.Sequential(
             nn.Conv2d(64, 3, 3, padding=1),
             nn.Hardtanh(0, 1),
         )
@@ -105,6 +109,7 @@ class ShapeRenderer(nn.Module):
 
         order_emb = self.order_emb.weight.unsqueeze(0).repeat(B, 1, 1).view(B * N, 64, 1, 1)
         x = x + torch.cat([color_emb.view(B * N, -1, 1, 1), order_emb], dim=1)
+        x = self.blend_layer(x)
         x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
 
         return x

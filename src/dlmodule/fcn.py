@@ -78,6 +78,7 @@ class ShapeRenderer(nn.Module):
         self.conv3 = conv_block(4, 4)
 
         self.color_encoder = linear_layer(3, 128)
+        self.order_emb = nn.Embedding(5, 128)
         self.out_layer = nn.Sequential(
             nn.Conv2d(128, 64, 3, padding=1),
             nn.ReLU(),
@@ -103,6 +104,7 @@ class ShapeRenderer(nn.Module):
         x = x.sigmoid()
 
         x = x + color_emb.view(B * N, -1, 1, 1)
-        x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
+        x = x.view(B, N, -1, 128, 128) + self.order_emb.view(1, 1, -1, 1, 1)
+        x = self.out_layer(x.max(1).values)
 
         return x

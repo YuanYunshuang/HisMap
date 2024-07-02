@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from src.dlmodule.fcn import FCN
-from src.utils.paint import paint_stroke, paint_polygon
+from src.utils import paint
 import torch.optim as optim
 import torchvision
 
@@ -16,12 +16,12 @@ writer = SummaryWriter("../train_log/src")
 
 use_cuda = torch.cuda.is_available()
 step = 0
-paint_func = paint_polygon
-n_params = 6
+paint_func = paint.paint_polygons_by_param
+n_params = 9 * 5
 ckpt_path = "../data/triangle_renderer.pkl"
 
 criterion = nn.MSELoss()
-net = FCN(n_params)
+net = FCN(n_params, color=True)
 optimizer = optim.Adam(net.parameters(), lr=3e-6)
 batch_size = 64
 
@@ -43,7 +43,7 @@ def load_weights():
         net.load_state_dict(model_dict)
 
 
-load_weights()
+# load_weights()
 while step < 100000:
     net.train()
     train_batch = []
@@ -51,7 +51,7 @@ while step < 100000:
     for i in range(batch_size):
         f = np.random.uniform(0, 1, n_params)
         train_batch.append(f)
-        ground_truth.append(paint_func(f))
+        ground_truth.append(paint_func(f.reshape(5, 9)).transpose(2, 0, 1))
 
     train_batch = torch.from_numpy(np.stack(train_batch, axis=0)).float()
     ground_truth = torch.from_numpy(np.stack(ground_truth, axis=0)).float()
@@ -80,8 +80,8 @@ while step < 100000:
         gen = net(train_batch)
         loss = criterion(gen, ground_truth)
         writer.add_scalar("val/loss", loss.item(), step)
-        gen_grid = torchvision.utils.make_grid(gen[:32].unsqueeze(1).repeat(1, 3, 1, 1))
-        gt_grid = torchvision.utils.make_grid(ground_truth[:32].unsqueeze(1).repeat(1, 3, 1, 1))
+        gen_grid = torchvision.utils.make_grid(gen[:32])
+        gt_grid = torchvision.utils.make_grid(ground_truth[:32])
         writer.add_image("train/gen", gen_grid, step, dataformats='CHW')
         writer.add_image("train/gt", gt_grid, step, dataformats='CHW')
     if step % 1000 == 0:

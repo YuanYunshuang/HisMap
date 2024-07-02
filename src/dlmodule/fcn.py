@@ -56,11 +56,11 @@ def linear_layer(in_channels, out_channels):
     )
 
 
-def conv_block(in_channels):
+def conv_block(in_channels, out_channels):
     return nn.Sequential(
         nn.Conv2d(in_channels, in_channels * 2, kernel_size=3, padding=1),
         nn.ReLU(),
-        nn.Conv2d(in_channels * 2, in_channels * 2, kernel_size=3, padding=1),
+        nn.Conv2d(in_channels * 2, out_channels, kernel_size=3, padding=1),
         nn.PixelShuffle(2)
     )
 
@@ -73,19 +73,26 @@ class ShapeRenderer(nn.Module):
         self.fc2 = linear_layer(512, 1024)
         self.fc3 = linear_layer(1024, 2048)
         self.fc4 = linear_layer(2048, 4096)
-        self.conv1 = conv_block(16)
-        self.conv2 = conv_block(8)
-        self.conv3 = conv_block(4)
+        self.conv1 = conv_block(16, 32)
+        self.conv2 = conv_block(8, 16)
+        self.conv3 = conv_block(4, 4)
 
-        self.color_encoder = linear_layer(3, 512)
+        self.color_encoder = linear_layer(3, 128)
+        self.out_layer = nn.Sequential(
+            nn.Conv2d(128, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 3, 3, padding=1),
+            nn.Hardtanh(0, 1),
+        )
 
         if state_dict_path is not None and os.path.exists(state_dict_path):
             self.load_state_dict(torch.load(state_dict_path))
 
-    def forward(self, xpar):
-        B, N, C = x.shape
-        x = x.view(-1, C)
-        x = self.fc1(x[:, :-3])
+    def forward(self, params):
+        B, N, C = params.shape
+        params = params.view(-1, C)
+        color_emb = self.color_encoder(params[:, -3:])
+        x = self.fc1(params[:, :-3])
         x = self.fc2(x)
         x = self.fc3(x)
         x = self.fc4(x)
@@ -95,6 +102,7 @@ class ShapeRenderer(nn.Module):
         x = self.conv3(x)
         x = x.sigmoid()
 
-        x = x.view(B, N)
+        x = x + color_emb.view(B * N, -1, 1, 1)
+        x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
 
-        return 1 - x.view(-1, 128, 128)
+        return x

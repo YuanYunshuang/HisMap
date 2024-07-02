@@ -7,7 +7,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
-from src.dlmodule.fcn import FCN
+from src.dlmodule.fcn import FCN, ShapeRenderer
 from src.utils import paint
 import torch.optim as optim
 import torchvision
@@ -17,11 +17,12 @@ writer = SummaryWriter("../train_log/src")
 use_cuda = torch.cuda.is_available()
 step = 0
 paint_func = paint.paint_polygons_by_param
-n_params = 9 * 5
+n_params = 6
+n_items = 5
 ckpt_path = "../data/triangle_renderer.pkl"
 
 criterion = nn.MSELoss()
-net = FCN(n_params, color=True)
+net = ShapeRenderer(n_params)
 optimizer = optim.Adam(net.parameters(), lr=3e-6)
 batch_size = 64
 
@@ -49,7 +50,7 @@ while step < 100000:
     train_batch = []
     ground_truth = []
     for i in range(batch_size):
-        f = np.random.uniform(0, 1, n_params)
+        f = np.random.uniform(0, 1, (n_items, n_params + 3))
         train_batch.append(f)
         ground_truth.append(paint_func(f.reshape(5, 9)).transpose(2, 0, 1))
 

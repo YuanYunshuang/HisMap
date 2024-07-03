@@ -13,7 +13,7 @@ from src.utils.common import *
 from src.drl.ddpg import DDPG
 from src.drl.env import FastEnv
 from src.drl.evaluator import Evaluator
-from src.dlmodule.fcn import FCN
+from src.dlmodule.renderer import FCN
 
 exp = os.path.abspath('.').split('/')[-1]
 writer = SummaryWriter('../train_log/{}'.format(exp))

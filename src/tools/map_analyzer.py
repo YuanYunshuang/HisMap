@@ -63,6 +63,66 @@ def analyze_color_coding(map_file):
             json.dump(color_encoding, f)
 
 
+def draw_color_palette(map_file):
+    img = cv2.imread(map_file)
+    h, w = img.shape[:2]
+    colors = np.unique(img[::4, ::4].reshape(-1, 3), axis=0)
+    # colors = colors[(colors>50).any(axis=-1)]
+    np.sort(colors, axis=0)
+
+    # Parameters
+    num_cols = 10
+    num_colors = len(colors)
+    num_rows = (num_colors + num_cols - 1) // num_cols  # Ensure we cover all colors
+
+    palette_width = 100
+    palette_height = 50
+    margin = 10
+    text_offset = 20
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.4
+    font_thickness = 1
+
+    # Create an image canvas
+    image_height = (palette_height + text_offset + margin) * num_rows + margin
+    image_width = (palette_width + margin) * num_cols + margin
+    image = np.ones((image_height, image_width, 3), dtype=np.uint8) * 255  # White background
+
+    # Draw each color and its RGB value
+    for i, color in enumerate(colors):
+        row = i // num_cols
+        col = i % num_cols
+        top_left = (margin + col * (palette_width + margin), margin + row * (palette_height + text_offset + margin))
+        bottom_right = (top_left[0] + palette_width, top_left[1] + palette_height)
+        cv2.rectangle(image, top_left, bottom_right, color.tolist(), -1)
+
+        # Prepare the RGB value text
+        rgb_text = f"{color}"
+        text_position = (top_left[0], bottom_right[1] + text_offset - 5)
+        cv2.putText(image, rgb_text, text_position, font, font_scale, (0, 0, 0), font_thickness)
+
+    # Show the image
+    cv2.imshow("Color Palette", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+def extract_color(map_file, color, out_file):
+    img = cv2.imread(map_file)
+    color = np.array(color).reshape(1, 1, 3)
+    mask = (img == color).all(axis=-1).astype(np.float32)
+
+    kernel_size = 7
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    cv2.imwrite(out_file, mask.astype(np.uint8) * 255)
+
+
 if __name__=="__main__":
-    analyze_color_coding("/home/data/HisMAP/full_map/3922_2017.tif")
+    map_file = "/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/3922_2017.tif"
+    # draw_color_palette("/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/3922_2017.tif")
+    extract_color(map_file, [137, 211, 198], f"/home/yuan/Downloads/3922_2017_{[137, 211, 198]}.tif")
 

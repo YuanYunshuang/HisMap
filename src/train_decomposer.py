@@ -7,7 +7,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
-from src.dlmodule.fcn import FCN
+from src.dlmodule.renderer import FCN, ShapeRenderer
 from src.dlmodule.resnet import ResNet
 from src.utils import paint
 from src.utils.train import freeze
@@ -22,7 +22,7 @@ n_params = 6
 n_triangle = 5
 ckpt_path = "../data/triangle_decomposer.pkl"
 
-renderer = freeze(FCN(n_params, state_dict_path="../data/triangle_renderer.pkl")).cuda()
+renderer = freeze(ShapeRenderer(n_params, state_dict_path="../data/triangle_renderer.pkl")).cuda()
 net = ResNet(3, 18, n_triangle * (n_params + 3))
 optimizer = optim.Adam(net.parameters(), lr=3e-6)
 batch_size = 64
@@ -55,9 +55,9 @@ while step < 500000:
     train_batch = []
     ground_truth = []
     for i in range(batch_size):
-        f = np.random.uniform(0, 1, n_triangle * (n_params + 3))
+        f = np.random.uniform(0, 1, (n_triangle,  (n_params + 3)))
         ground_truth.append(f)
-        train_batch.append(paint.paint_polygons_by_param(f.reshape(n_triangle, -1)).transpose(2, 0, 1))
+        train_batch.append(paint.paint_polygons_by_param(f).transpose(2, 0, 1))
 
     train_batch = torch.from_numpy(np.stack(train_batch, axis=0)).float()
     ground_truth = torch.from_numpy(np.stack(ground_truth, axis=0)).float()

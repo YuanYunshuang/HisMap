@@ -102,13 +102,16 @@ def paint_polygons_by_renderer(polygons, width=128, renderer=None):
     B, N, _ = polygons.shape
     canvas = torch.zeros([B, 3, width, width], device=polygons.device, dtype=polygons.dtype)
 
-    masks = renderer(polygons[..., :-3].view(B*N, -1))
-    masks = masks.view(-1, width, width, 1)
-    colored_masks = masks * polygons[..., -3:].view(-1, 1, 1, 3)
-    masks = masks.permute(0, 3, 1, 2).view(-1, N, 1, width, width)
-    colored_masks = colored_masks.permute(0, 3, 1, 2).view(-1, N, 3, width, width)
-    for i in range(N):
-        canvas = canvas * (1 - masks[:, i]) + colored_masks[:, i]
+    if renderer.__class__.__name__ == 'ShapeRenderer':
+        canvas = renderer(polygons)
+    else:
+        masks = renderer(polygons[..., :-3].view(B*N, -1))
+        masks = masks.view(-1, width, width, 1)
+        colored_masks = masks * polygons[..., -3:].view(-1, 1, 1, 3)
+        masks = masks.permute(0, 3, 1, 2).view(-1, N, 1, width, width)
+        colored_masks = colored_masks.permute(0, 3, 1, 2).view(-1, N, 3, width, width)
+        for i in range(N):
+            canvas = canvas * (1 - masks[:, i]) + colored_masks[:, i]
     # cv2.imshow('img1', canvas[0].permute(1, 2, 0).detach().cpu().numpy())
     # cv2.waitKey()
     # paint_polygons_by_param(polygons[0].detach().cpu().numpy(), show=True)

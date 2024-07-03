@@ -7,7 +7,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
-from src.dlmodule.fcn import FCN, ShapeRenderer
+from src.dlmodule.renderer import FCN, ShapeRenderer
 from src.utils import paint
 import torch.optim as optim
 import torchvision

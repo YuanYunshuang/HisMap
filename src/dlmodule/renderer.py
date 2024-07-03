@@ -4,6 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+PENS = {
+    0: {'name': 'void', 'param': 0},
+    1: {'name': 'polygon3', 'param': 6},
+    2: {'name': 'polygon4', 'param': 8},
+    3: {'name': 'line', 'param': 6},
+}
+
 
 class FCN(nn.Module):
     def __init__(self, n_params, color=False, state_dict_path=None):
@@ -56,7 +63,7 @@ def linear_layer(in_channels, out_channels):
     )
 
 
-def conv_block(in_channels, out_channels):
+def upsample_block(in_channels, out_channels):
     return nn.Sequential(
         nn.Conv2d(in_channels, in_channels * 2, kernel_size=3, padding=1),
         nn.ReLU(),
@@ -73,9 +80,9 @@ class ShapeRenderer(nn.Module):
         self.fc2 = linear_layer(512, 1024)
         self.fc3 = linear_layer(1024, 2048)
         self.fc4 = linear_layer(2048, 4096)
-        self.conv1 = conv_block(16, 32)
-        self.conv2 = conv_block(8, 16)
-        self.conv3 = conv_block(4, 4)
+        self.conv1 = upsample_block(16, 32)
+        self.conv2 = upsample_block(8, 16)
+        self.conv3 = upsample_block(4, 4)
 
         self.color_encoder = linear_layer(3, 64)
         self.order_emb = nn.Embedding(5, 64)
@@ -112,4 +119,40 @@ class ShapeRenderer(nn.Module):
         x = self.blend_layer(x)
         x = self.out_layer(x.view(B, N, -1, 128, 128).max(1).values)
 
+        return x
+
+
+class SplineRenderer(nn.Module):
+
+    def __init__(self, n_params, state_dict_path=None):
+        super(SplineRenderer, self).__init__()
+        self.n_params = n_params
+        self.param_encoder = nn.Sequential(
+            nn.Conv2d(n_params, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            self.conv_block(64, 128),
+        )
+
+        self.canvas_decoder = nn.Sequential(
+            upsample_block(128, 128),
+            upsample_block(32, 32),
+            upsample_block(8, 4),
+        )
+
+        if state_dict_path is not None and os.path.exists(state_dict_path):
+            self.load_state_dict(torch.load(state_dict_path))
+
+    def conv_block(self, in_channels, out_channels):
+        return nn.Sequential(
+            nn.Conv2d(in_channels, in_channels * 2, kernel_size=3, padding=1),
+            nn.BatchNorm2d(in_channels * 2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels * 2, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(out_channels),
+        )
+
+    def forward(self, params):
+        x = self.param_encoder(params)
+        x = self.canvas_decoder(x)
         return x

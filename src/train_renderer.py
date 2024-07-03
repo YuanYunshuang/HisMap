@@ -1,4 +1,5 @@
 import os.path
+import random
 
 import cv2
 import torch
@@ -7,8 +8,8 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
-from src.dlmodule.renderer import FCN, ShapeRenderer
-from src.utils import paint
+from src.dlmodule.renderer import FCN, ShapeRenderer, SplineRenderer
+from src.utils import paint, splines
 import torch.optim as optim
 import torchvision
 
@@ -16,13 +17,13 @@ writer = SummaryWriter("../train_log/src")
 
 use_cuda = torch.cuda.is_available()
 step = 0
-paint_func = paint.paint_polygons_by_param
-n_params = 6
-n_items = 5
-ckpt_path = "../data/triangle_renderer.pkl"
+paint_func = splines.draw_splines_on_canvas
+n_params = 25
+size = 128 // 8
+ckpt_path = "../data/spline_renderer.pkl"
 
 criterion = nn.MSELoss()
-net = ShapeRenderer(n_params)
+net = SplineRenderer(n_params)
 optimizer = optim.Adam(net.parameters(), lr=3e-6)
 batch_size = 64
 
@@ -50,9 +51,11 @@ while step < 100000:
     train_batch = []
     ground_truth = []
     for i in range(batch_size):
-        f = np.random.uniform(0, 1, (n_items, n_params + 3))
+        f = np.random.uniform(0, 1, (size, size, 25))
         train_batch.append(f)
-        ground_truth.append(paint_func(f.reshape(5, 9)).transpose(2, 0, 1))
+        ground_truth.append(paint_func(f[..., 0] > 1 - random.random() * 0.5,
+                                       f[..., 1:].reshape(size, size, 8, 3),
+                                       8))
 
     train_batch = torch.from_numpy(np.stack(train_batch, axis=0)).float()
     ground_truth = torch.from_numpy(np.stack(ground_truth, axis=0)).float()
@@ -75,16 +78,16 @@ while step < 100000:
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
     writer.add_scalar("train/loss", loss.item(), step)
-    if step % 100 == 0:
-        print(step, loss.item())
+    print(step, loss.item())
+    if step % 10 == 0:
         net.eval()
         gen = net(train_batch)
         loss = criterion(gen, ground_truth)
         writer.add_scalar("val/loss", loss.item(), step)
-        gen_grid = torchvision.utils.make_grid(gen[:32])
-        gt_grid = torchvision.utils.make_grid(ground_truth[:32])
+        gen_grid = torchvision.utils.make_grid(gen[:32].unsqueeze(1))
+        gt_grid = torchvision.utils.make_grid(ground_truth[:32].unsqueeze(1))
         writer.add_image("train/gen", gen_grid, step, dataformats='CHW')
         writer.add_image("train/gt", gt_grid, step, dataformats='CHW')
-    if step % 1000 == 0:
+    if step % 100 == 0:
         save_model()
     step += 1

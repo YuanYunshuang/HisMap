@@ -153,6 +153,7 @@ class SplineRenderer(nn.Module):
         )
 
     def forward(self, params):
-        x = self.param_encoder(params)
+        x = params.permute(0, 3, 1, 2)
+        x = self.param_encoder(x)
         x = self.canvas_decoder(x)
-        return x
+        return x.squeeze()

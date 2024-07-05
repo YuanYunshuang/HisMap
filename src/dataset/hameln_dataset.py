@@ -19,9 +19,9 @@ class HamelnDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, item):
-        sample = self.samples[item]
-        x = min(max(0, sample[0] + random.randint(-self.size, self.size)), self.H - self.size)
-        y = min(max(0, sample[1] + random.randint(-self.size, self.size)), self.W - self.size)
+        x, y = self.samples[item]
+        # x = min(max(0, sample[0] + random.randint(-self.size, self.size)), self.H - self.size)
+        # y = min(max(0, sample[1] + random.randint(-self.size, self.size)), self.W - self.size)
         sample = self.hismap[x:x+self.size, y:y+self.size]
         return sample
 

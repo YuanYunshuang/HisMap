@@ -12,7 +12,7 @@ class HamelnDataset(Dataset):
         self.H, self.W = self.hismap.shape
         self.size = cfgs['img_size']
         samples = np.stack(np.where(self.hismap), axis=-1)
-        samples = np.unique(samples // 4) * 4
+        samples = np.unique(samples // 16, axis=0) * 16
         valid = (samples[:, 0] < self.H - self.size) & (samples[:, 1] < self.W - self.size)
         self.samples = samples[valid]
 

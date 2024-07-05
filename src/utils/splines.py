@@ -3,6 +3,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import torch
 
 
 def draw_bezier_curve(bezier_curve, nt=128, show=False):
@@ -97,6 +98,19 @@ def draw_splines_on_canvas(mask, params, resize_factor=1, nt=32, show=False):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     return canvas
+
+
+def paint_splines(params, img_size=128):
+    grid_size = params.shape[-1]
+    resize_factor = img_size // grid_size
+    params_np = params.permute(0, 2, 3, 1).detach().cpu().numpy()
+    canvas_list = []
+    for param in params_np:
+        grid_mask = param[..., 0] > 0.5
+        grid_param = param[..., 1:].reshape(grid_size, grid_size, 8, 3)
+        canvas = draw_splines_on_canvas(grid_mask, grid_param, resize_factor)
+        canvas_list.append(canvas)
+    return torch.from_numpy(np.stack(canvas_list, axis=0)).float().to(params.device)
 
 
 def random_walk(size):

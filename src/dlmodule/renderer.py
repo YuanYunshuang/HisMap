@@ -157,7 +157,7 @@ class SplineRenderer(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, params):
-        x = params.permute(0, 3, 1, 2)
-        x = self.param_encoder(x)
+        # x = params.permute(0, 3, 1, 2)
+        x = self.param_encoder(params)
         x = self.canvas_decoder(x).sigmoid()
         return x.squeeze()

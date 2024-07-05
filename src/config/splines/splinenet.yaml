@@ -1,0 +1,33 @@
+DATASET: 'pycfg.base.hameln.hameln_train'
+
+TRAIN:
+  log_every: 10
+  max_epoch: 10
+  gpus: 0
+  hooks: 'pycfg.base.hooks.train_hooks'
+  optimizer:
+    lr: 0.0002
+    weight_decay: 1e-2
+    betas: [0.9, 0.98]
+  lr_scheduler:
+    policy: 'MultiStepLR'
+    milestones: [5, 8]
+    gamma: 0.1
+
+TEST:
+  hooks: []
+
+
+MODEL:
+  type: 'splinenet.SplineNet'
+  n_params: 25
+
+
+
+
+
+
+
+
+
+

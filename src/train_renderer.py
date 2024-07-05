@@ -51,9 +51,13 @@ while step < 100000:
     train_batch = []
     ground_truth = []
     for i in range(batch_size):
-        f = np.random.uniform(0, 1, (size, size, 25))
+        f = np.random.uniform(0, 1, (size, size, 24))
+        score = np.random.uniform(0, 1, (size, size, 1))
+        thr = 1 - random.random() * 0.5
+        score = score * (score < thr)
+        f = np.concatenate((score / thr, f), axis=2)
         train_batch.append(f)
-        ground_truth.append(paint_func(f[..., 0] > 1 - random.random() * 0.5,
+        ground_truth.append(paint_func(f[..., 0] > 0.5,
                                        f[..., 1:].reshape(size, size, 8, 3),
                                        8))
 
@@ -78,8 +82,8 @@ while step < 100000:
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
     writer.add_scalar("train/loss", loss.item(), step)
-    print(step, loss.item())
-    if step % 10 == 0:
+    if step % 100 == 0:
+        print(step, loss.item())
         net.eval()
         gen = net(train_batch)
         loss = criterion(gen, ground_truth)
@@ -88,6 +92,8 @@ while step < 100000:
         gt_grid = torchvision.utils.make_grid(ground_truth[:32].unsqueeze(1))
         writer.add_image("train/gen", gen_grid, step, dataformats='CHW')
         writer.add_image("train/gt", gt_grid, step, dataformats='CHW')
-    if step % 100 == 0:
+    if step % 1000 == 0:
         save_model()
     step += 1
+
+

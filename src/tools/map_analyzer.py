@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import json
 import open3d as o3d
+import torch
+import torch.nn.functional as F
 
 
 def plot_color_space(colors):
@@ -121,8 +123,21 @@ def extract_color(map_file, color, out_file):
     cv2.imwrite(out_file, mask.astype(np.uint8) * 255)
 
 
+def extract_boundary(map_file, out_file):
+    img = cv2.imread(map_file) / 255
+    img = torch.from_numpy(img[..., 0:1]).permute(2, 0, 1).unsqueeze(0).float()
+    filters = torch.ones(1, 1, 3, 3)
+    boundary = F.conv2d(img, filters, padding=1)
+    boundary = torch.clip(1 - (boundary - 9 / 2).abs() / 4.5, min=0, max=0.5) * 2
+    boundary = boundary.float().repeat(1, 3, 1, 1).cpu().numpy()
+    boundary = boundary.squeeze(0).transpose(1, 2, 0) * 255
+    cv2.imwrite(out_file, boundary.astype(np.uint8))
+
+
 if __name__=="__main__":
     map_file = "/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/3922_2017.tif"
     # draw_color_palette("/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/3922_2017.tif")
-    extract_color(map_file, [137, 211, 198], f"/home/yuan/Downloads/3922_2017_{[137, 211, 198]}.tif")
+    # extract_color(map_file, [137, 211, 198], "/home/yuan/Downloads/3922_2017_forest.tif")
+    extract_boundary("/home/yuan/Downloads/3922_2017_forest.tif",
+                     "/home/yuan/Downloads/3922_2017_forest_bdry.tif")
 

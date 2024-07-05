@@ -142,18 +142,22 @@ class SplineRenderer(nn.Module):
         if state_dict_path is not None and os.path.exists(state_dict_path):
             self.load_state_dict(torch.load(state_dict_path))
 
-    def conv_block(self, in_channels, out_channels):
-        return nn.Sequential(
+    def conv_block(self, in_channels, out_channels, activate_last=True):
+        layers = nn.Sequential(
             nn.Conv2d(in_channels, in_channels * 2, kernel_size=3, padding=1),
             nn.BatchNorm2d(in_channels * 2),
             nn.ReLU(),
             nn.Conv2d(in_channels * 2, out_channels, kernel_size=3, padding=1),
+        )
+        if activate_last:
+            layers.extend([
             nn.BatchNorm2d(out_channels),
             nn.ReLU(out_channels),
-        )
+            ])
+        return nn.Sequential(*layers)
 
     def forward(self, params):
         x = params.permute(0, 3, 1, 2)
         x = self.param_encoder(x)
-        x = self.canvas_decoder(x)
+        x = self.canvas_decoder(x).sigmoid()
         return x.squeeze()

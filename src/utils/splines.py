@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -36,7 +38,7 @@ def draw_splines(mask, params, meter_per_pix=1, nt=32, show=False):
     Draw splines.
 
     :param mask: (H, W), pixels with True are the valid control points of splines.
-    :param params: (H, W, 8, 3), parameters (direction, length) of each possible control point
+    :param params: (H, W, 8, 3), parameters (direction, length, width) of each possible control point
         relative to the 8 neighbors.
     :param meter_per_pix: (int) resize factor.
     """
@@ -47,10 +49,13 @@ def draw_splines(mask, params, meter_per_pix=1, nt=32, show=False):
     curves = []
     thickness = []
     for idx in inds:
-        nbrs = nbrs_next + idx
-        valid = (nbrs >= 0).all(-1) & (nbrs[:, 0] < h) & (nbrs[:, 1] < w)
-        valid_idx = np.where(valid)[0]
-        valid_nbrs = nbrs[valid_idx]
+        nbrs_idx = nbrs_next + idx
+        m = (nbrs_idx >= 0).all(-1) & (nbrs_idx[:, 0] < h) & (nbrs_idx[:, 1] < w)
+        nbrs_idx = nbrs_idx[m]
+        valid_idx = np.where(m)[0]
+        m = mask[nbrs_idx[:, 0], nbrs_idx[:, 1]]
+        valid_nbrs = nbrs_idx[m]
+        valid_idx = valid_idx[m]
         p1 = (idx + 0.5) * meter_per_pix
         for i, p4_idx in zip(valid_idx, valid_nbrs):
             p4 = (p4_idx + 0.5) * meter_per_pix
@@ -81,7 +86,7 @@ def draw_splines_on_canvas(mask, params, resize_factor=1, nt=32, show=False):
     h, w = mask.shape
     canvas = np.zeros((h * resize_factor, w * resize_factor), dtype=np.float32)
     for curve, thick in zip(curves, thickness):
-        curve = curve.astype(np.int32)
+        curve = curve.astype(np.int32)[..., [1, 0]]
         line_width = np.linspace(thick[0], thick[1], len(curve)).astype(int)
         line_width = np.clip(line_width, 1, resize_factor // 2)
         for i in range(0, len(curve) - 1):
@@ -94,9 +99,14 @@ def draw_splines_on_canvas(mask, params, resize_factor=1, nt=32, show=False):
     return canvas
 
 
+def random_walk(size):
+    x = random.randint(0, size - 1)
+
+
+
 if __name__ == '__main__':
     # draw_bezier_curve(np.random.random((4, 2)), nt=128, show=True)
-    grid_mask = np.random.rand(16, 16) > 0.7
+    grid_mask = np.random.rand(4, 4) > 0.7
     grid_mask[1, 1] = True
-    grid_params = np.random.rand(16, 16, 8, 4)
-    draw_splines_on_canvas(grid_mask, grid_params, resize_factor=16, show=True)
+    grid_params = np.random.rand(4, 4, 8, 4)
+    draw_splines(grid_mask, grid_params, show=True)

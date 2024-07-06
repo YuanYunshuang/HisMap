@@ -121,22 +121,24 @@ class TrainRunner(BaseRunner):
         load_tensors_to_gpu(data, self.gpu_id)
         self.renderer_optimizer.zero_grad()
         self.spliner_optimizer.zero_grad()
-        self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
-        total_loss, loss_dict = self.model.loss()
+
         # total_loss.backward()
 
         # grad_norm = clip_grads(self.model.parameters())
         # loss_dict['grad_norm'] = grad_norm
         # Updating parameters
         # self.renderer_optimizer.step()
-        loss_dict['spliner_loss'].backward()
-        self.spliner_optimizer.step()
-        self.spliner_optimizer.zero_grad()
 
         self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
         total_loss, loss_dict = self.model.loss()
         loss_dict['render_loss'].backward()
         self.renderer_optimizer.step()
+
+        self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
+        total_loss, loss_dict = self.model.loss()
+        loss_dict['spliner_loss'].backward()
+        self.spliner_optimizer.step()
+        self.spliner_optimizer.zero_grad()
 
         self.lr_scheduler.step_itr(self.iter + self.epoch * self.total_iter)
 

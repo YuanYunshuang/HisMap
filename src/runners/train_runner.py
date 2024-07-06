@@ -36,8 +36,9 @@ class TrainRunner(BaseRunner):
             self.gpu_id = int(os.environ.get("LOCAL_RANK", 0))
             self.model.to_gpu(self.gpu_id)
             self.model = DDP(self.model, device_ids=[self.gpu_id])
-        self.optimizer = build_optimizer(self.model, optimizer)
-        self.lr_scheduler = build_lr_scheduler(self.optimizer, lr_scheduler,
+        self.renderer_optimizer = build_optimizer(self.model.renderer, optimizer)
+        self.spliner_optimizer = build_optimizer(self.model.spliner, optimizer)
+        self.lr_scheduler = build_lr_scheduler(self.spliner_optimizer, lr_scheduler,
                                                len(self.dataloader))
         self.total_epochs = max_epoch
         self.start_epoch = 1
@@ -118,15 +119,23 @@ class TrainRunner(BaseRunner):
 
     def run_itr(self, data):
         load_tensors_to_gpu(data, self.gpu_id)
-        self.optimizer.zero_grad()
+        self.renderer_optimizer.zero_grad()
         self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
         total_loss, loss_dict = self.model.loss()
-        total_loss.backward()
+        # total_loss.backward()
 
-        grad_norm = clip_grads(self.model.parameters())
-        loss_dict['grad_norm'] = grad_norm
+        # grad_norm = clip_grads(self.model.parameters())
+        # loss_dict['grad_norm'] = grad_norm
         # Updating parameters
-        self.optimizer.step()
+        # self.renderer_optimizer.step()
+        loss_dict['spliner_loss'].backward()
+        self.spliner_optimizer.step()
+        self.spliner_optimizer.zero_grad()
+
+        self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
+        total_loss, loss_dict = self.model.loss()
+        loss_dict['render_loss'].backward()
+        self.renderer_optimizer.step()
 
         self.lr_scheduler.step_itr(self.iter + self.epoch * self.total_iter)
 

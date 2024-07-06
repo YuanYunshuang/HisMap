@@ -13,6 +13,7 @@ class SplineNet(nn.Module):
         self.n_params = n_params
         self.spliner = SplineDecoder(1, 18, self.n_params)
         self.renderer = SplineRenderer(self.n_params)
+        self.renderer.load_state_dict(torch.load("/home/yuan/code/HisMap/data/spline_renderer.pkl"))
         self.painter = paint_splines
         self.loss_fn = build_loss('SmoothL1Loss')
 

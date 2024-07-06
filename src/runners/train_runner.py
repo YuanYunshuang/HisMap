@@ -129,10 +129,10 @@ class TrainRunner(BaseRunner):
         # Updating parameters
         # self.renderer_optimizer.step()
 
-        self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
-        total_loss, loss_dict = self.model.loss()
-        loss_dict['render_loss'].backward()
-        self.renderer_optimizer.step()
+        # self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
+        # total_loss, loss_dict = self.model.loss()
+        # loss_dict['render_loss'].backward()
+        # self.renderer_optimizer.step()
 
         self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
         total_loss, loss_dict = self.model.loss()

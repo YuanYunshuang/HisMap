@@ -158,6 +158,8 @@ class SplineRenderer(nn.Module):
 
     def forward(self, params):
         # x = params.permute(0, 3, 1, 2)
-        x = self.param_encoder(params)
+        scores = (params[:, :1] - 0.5).relu()
+        x = torch.cat((scores, params[:, 1:]), 1)
+        x = self.param_encoder(x)
         x = self.canvas_decoder(x).sigmoid()
         return x.squeeze()

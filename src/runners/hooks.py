@@ -120,8 +120,8 @@ class CheckPointsHook(BaseHook):
         print(f'Saving checkpoint to {save_path}.')
         torch.save({
             'epoch': runner.epoch,
-            'model': runner.forward_runner.state_dict(),
-            'optimizer': runner.optimizer.state_dict(),
+            'model': runner.model.state_dict(),
+            # 'optimizer': runner.optimizer.state_dict(),
             'lr_scheduler': runner.lr_scheduler.state_dict(),
         }, save_path)
 

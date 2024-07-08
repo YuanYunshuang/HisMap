@@ -136,8 +136,10 @@ def extract_boundary(map_file, out_file):
 
 if __name__=="__main__":
     map_file = "/home/data/HisMAP/full_map/3922_2017.tif"
-    # draw_color_palette("/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/3922_2017.tif")
-    extract_color(map_file, [137, 211, 198], "/home/data/HisMAP/full_map/3922_2017_forest.tif")
-    extract_boundary("/home/data/HisMAP/full_map/3922_2017_forest.tif",
-                     "/home/data/HisMAP/full_map/3922_2017_forest_bdry.tif")
+    # extract_color(map_file, [137, 211, 198], "/home/data/HisMAP/full_map/3922_2017_forest.tif")
+    # extract_boundary("/home/data/HisMAP/full_map/3922_2017_forest.tif",
+    #                  "/home/data/HisMAP/full_map/3922_2017_forest_bdry.tif")
+
+    img = cv2.imread("/home/yuan/Downloads/3922_2017_forest_bdry.tif")
+    cv2.imwrite("/home/yuan/Downloads/tmp.png", img[256:512, 256:512])
 

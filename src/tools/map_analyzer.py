@@ -2,12 +2,12 @@ import os
 import cv2
 import numpy as np
 import json
-import open3d as o3d
 import torch
 import torch.nn.functional as F
 
 
 def plot_color_space(colors):
+    import open3d as o3d
     pcd = o3d.geometry.PointCloud()
 
     # Assign the points and colors
@@ -134,12 +134,122 @@ def extract_boundary(map_file, out_file):
     cv2.imwrite(out_file, boundary.astype(np.uint8))
 
 
-if __name__=="__main__":
-    map_file = "/home/data/HisMAP/full_map/3922_2017.tif"
-    # extract_color(map_file, [137, 211, 198], "/home/data/HisMAP/full_map/3922_2017_forest.tif")
-    # extract_boundary("/home/data/HisMAP/full_map/3922_2017_forest.tif",
-    #                  "/home/data/HisMAP/full_map/3922_2017_forest_bdry.tif")
+def angle_vecs(vec1, vec2):
+    vec1 = vec1.reshape(-1, 2)
+    vec2 = vec2.reshape(-1, 2)
+    vec1_norm = np.linalg.norm(vec1, axis=-1, keepdims=True)
+    vec2_norm = np.linalg.norm(vec2, axis=-1, keepdims=True)
+    return np.arccos((vec1 @ vec2.T) / (vec1_norm * vec2_norm))
 
-    img = cv2.imread("/home/yuan/Downloads/3922_2017_forest_bdry.tif")
-    cv2.imwrite("/home/yuan/Downloads/tmp.png", img[256:512, 256:512])
+
+def kernel_to_nbrs(kernel_size):
+    s = kernel_size // 2
+    nbrs = np.meshgrid(np.arange(-s, s + 1), np.arange(-s, s + 1))
+    nbrs = np.stack(nbrs, axis=-1).reshape(-1, 2)
+    return nbrs
+
+
+def boundary_to_vector(map_file, kernel_size=5):
+    input_img = cv2.imread(map_file)
+    img = input_img[..., 0] / 255
+    out_img = np.zeros_like(input_img)
+    boundry_points = np.stack(np.where(img), axis=-1)
+    nbrs = kernel_to_nbrs(kernel_size)
+    polygons = []
+    i = 1
+
+    while len(boundry_points) > 0:
+        point = boundry_points[0]
+        img[point[0], point[1]] = 0
+        start_point = np.array(point)
+        polygon = [start_point]
+        while True:
+            xs = nbrs[:, 0] + start_point[0]
+            ys = nbrs[:, 1] + start_point[1]
+            mask = img[xs, ys] > 0
+            img[xs, ys] = 0
+            if np.sum(mask) == 0:
+                if np.linalg.norm(start_point - polygon[0]) < kernel_size:
+                    polygon = np.stack(polygon, axis=0)
+                    polygons.append(polygon)
+                    boundry_points = np.stack(np.where(img), axis=-1)
+                    color = (np.random.random(3) * 255).astype(int)
+                    cv2.polylines(out_img, [np.stack(polygon, axis=0)[:, ::-1]], True, color.tolist(), 5)
+                    cv2.imwrite(map_file.split('.')[0] + '_polygon.jpg', out_img)
+                    print(len(boundry_points))
+                    break
+                else:
+                    ks = kernel_size + 2
+                    found_next = False
+                    while True:
+                        tmp_nbrs = kernel_to_nbrs(ks + 2)
+                        xs = tmp_nbrs[:, 0] + start_point[0]
+                        ys = tmp_nbrs[:, 1] + start_point[1]
+                        mask = img[xs, ys] > 0
+                        if np.sum(mask) > 0:
+                            found_next = True
+                            break
+                        elif ks < 30:
+                            ks += 2
+                        else:
+                            break
+                    if not found_next:
+                        polygon = np.stack(polygon, axis=0)
+                        polygons.append(polygon)
+                        boundry_points = np.stack(np.where(img), axis=-1)
+                        color = (np.random.random(3) * 255).astype(int)
+                        cv2.polylines(out_img, [np.stack(polygon, axis=0)[:, ::-1]], False, color.tolist(), 5)
+                        cv2.imwrite(map_file.split('.')[0] + '_polygon.jpg', out_img)
+                        print(len(boundry_points))
+                        break
+
+            xs, ys = xs[mask], ys[mask]
+            xys = np.stack([xs, ys], axis=-1)
+
+            dxy = xys - start_point
+            # dxy_mean = dxy.mean(axis=0, keepdims=True)
+            # mean, eigenvectors, eigenvalues = cv2.PCACompute2(xys, mean=xys.mean(axis=0).reshape(-1, 2))
+            # main_vec = eigenvectors[np.argmax(eigenvalues)]
+            # angles = angle_vecs(dxy, dxy_mean)
+            # idx = np.argmin(angles)
+            idx = np.argmax(np.linalg.norm(dxy, axis=-1))
+            next_point = xys[idx]
+
+            if len(polygon) == 1:
+                polygon.append(next_point)
+            else:
+                last_vec = polygon[-1] - polygon[-2]
+                angle_diff = angle_vecs(next_point - polygon[-1], last_vec)
+                if angle_diff < 0.3:
+                    polygon[-1] = next_point
+                else:
+                    polygon.append(next_point)
+            start_point = next_point
+            i += 1
+            # if i % 200 == 0:
+            #     color = (np.random.random(3) * 255).astype(int)
+            #     cv2.polylines(out_img, [np.stack(polygon, axis=0)], True, color.tolist(), 5)
+            #     cv2.imwrite(map_file.split('.')[0] + '_polygon.jpg', out_img)
+
+
+            # vis = img[max(start_point[0] - 128, 0):min(start_point[0] + 128, img.shape[0]),
+            #       max(start_point[1] - 128, 0):min(start_point[1] + 128, img.shape[1])]
+            # cv2.imshow('img', vis * 255)
+            # cv2.waitKey()
+
+    np.savez(map_file.split('.')[0] + '_polygon.npz', polygons=polygons)
+
+
+
+if __name__=="__main__":
+    map_path = f"/media/yuan/luna/data/HisMAP/full_map"
+    # map_file = f"{map_path}/3922_2017.tif"
+    # extract_color(map_file, [137, 211, 198], f"{map_path}/3922_2017_forest.tif")
+    # extract_boundary(f"{map_path}/3922_2017_forest.tif",
+    #                  f"{map_path}/3922_2017_forest_bdry.tif")
+
+    # img = cv2.imread(f"{map_path}/3922_2017_forest_bdry.tif")
+    # cv2.imwrite(f"{map_path}/tmp.png", 255 - img[512:1024:, 512:1023])
+
+    boundary_to_vector(f"{map_path}/3922_2017_forest_bdry.tif")
 

@@ -9,8 +9,8 @@ class SegNet(nn.Module):
     def __init__(self, loss_cfg, **kwargs):
         super().__init__()
         self.unet = UNet(**kwargs)
+        self.loss_neg_pos_ratio = loss_cfg.pop('neg_pos_ratio', None)
         self.loss_fn = build_loss(**loss_cfg)
-        self.loss_neg_pos_ratio = kwargs.get('neg_pos_ratio', None)
 
     def forward(self, data, **kwargs):
         x = data['input_img']
@@ -26,6 +26,8 @@ class SegNet(nn.Module):
         pred = data['pred_img'].flatten(2, 3).permute(0, 2, 1).flatten(0, 1)
         gt = (data['gt_img'][:, 0].flatten(1, 2) > 0).float().flatten(0, 1)
         cared = self.sample_target(gt)
+        if cared.sum() == 0:
+            cared = torch.rand_like(gt) < 0.1
         total_loss = self.loss_fn(pred[cared], gt[cared], temp=epoch)
         loss_dict = {
             'total_loss': total_loss

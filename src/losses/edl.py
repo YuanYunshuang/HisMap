@@ -146,9 +146,12 @@ def pred_to_conf_unc(preds, activation='relu', edl=True):
     else:
         # use entropy as uncertainty
         entropy = -evidence * torch.log2(evidence)
-        unc = entropy.sum(dim=-1)[..., 0]
+        unc = entropy.sum(dim=-1)
         # conf = torch.sqrt(evidence * (1 - unc.unsqueeze(-1)))
-        conf = evidence[..., 0]
+        conf = evidence
+        if activation == 'sigmoid':
+            unc = unc[..., 0]
+            conf = conf[..., 0]
     return conf, unc
 
 

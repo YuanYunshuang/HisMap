@@ -269,7 +269,7 @@ if __name__=="__main__":
     # boundary_to_vector(f"{map_path}/3922_2017_forest_bdry.tif")
     # tiff_array = read_tiff("/home/yuan/data/HisMap/Hameln/Raster_2023/3922_2023_for.tif")
     # cv2.imwrite("/home/yuan/Downloads/tmp.png", 255 - tiff_array)
-    overlay_channels(
-        "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_conf.png",
-        "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_gt.png"
-    )
+    # overlay_channels(
+    #     "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_conf.png",
+    #     "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_gt.png"
+    # )

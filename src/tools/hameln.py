@@ -47,9 +47,9 @@ def generate_dataset(map_dir, raster_dir, out_dir, year, category, img_size=512,
 
 if __name__=="__main__":
     generate_dataset(
-        "/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m",
-        "/home/yuan/data/HisMap/Hameln/Raster_2023",
-        "/home/yuan/data/HisMap/Hameln/seg_forest",
+        "/home/data/HisMAP/Hameln/TK_projektiv_entzerrt_1m",
+        "/home/data/HisMAP/Hameln/Raster_2023",
+        "/home/data/HisMAP/Hameln/seg_forest",
         2017,
         'for'
     )

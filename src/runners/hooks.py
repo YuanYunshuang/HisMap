@@ -3,8 +3,12 @@
 import os
 import time
 
+import cv2
+import numpy as np
 import torch
 from torchvision.utils import make_grid
+import matplotlib.pyplot as plt
+from src.utils.logger import plt_to_image
 
 
 class Hooks:
@@ -146,8 +150,98 @@ class ImgWriterHook(BaseHook):
                     runner.writer.add_image(f"train/{k.replace('_img', '')}", img, steps)
 
 
+class SegPlotWriterHook(BaseHook):
+    def __init__(self, max_n_img=32, log_every=50, **kwargs):
+        super().__init__(**kwargs)
+        self.max_n_img = max_n_img
+        self.log_every = log_every
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        steps = (runner.epoch - 1) * runner.total_iter + runner.iter
+        if steps % self.log_every == 0:
+            fig = plt.figure(figsize=(16, 4))
+            axs = fig.subplots(1, 4)
+            axs[0].imshow(out_dict['input_img'][0].permute(1, 2, 0).detach().cpu().numpy())
+            axs[1].imshow(out_dict['conf_img'][0, :, :, 1].detach().cpu().numpy(), cmap='jet')
+            axs[2].imshow(1 - out_dict['unc_img'][0].detach().cpu().numpy(), cmap='hot')
+            axs[3].imshow((out_dict['gt_img'][0] > 0).float().permute(1, 2, 0).detach().cpu().numpy(), cmap='jet')
+            image = plt_to_image(plt)
+            plt.close()
+            runner.writer.add_image(f"train/img", image, steps, dataformats='HWC')
 
 
+class SaveSegResultHook(BaseHook):
+    def __init__(self, save_every=4, **kwargs):
+        super().__init__(**kwargs)
+        self.save_every = save_every
+
+    def set_logger(self, logger):
+        self.log_dir = os.path.join(logger.logdir, 'seg_result')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        for i, f in enumerate(out_dict['filename']):
+            if i % self.save_every == 0:
+                fig = plt.figure(figsize=(15, 5))
+                axs = fig.subplots(1, 4)
+                axs[0].imshow(out_dict['input_img'][0].permute(1, 2, 0).detach().cpu().numpy())
+                axs[1].imshow(out_dict['conf_img'][0, :, :, 1].detach().cpu().numpy(), cmap='jet')
+                axs[2].imshow(1 - out_dict['unc_img'][0].detach().cpu().numpy(), cmap='hot')
+                axs[3].imshow((out_dict['gt_img'][0] > 0).float().permute(1, 2, 0).detach().cpu().numpy(), cmap='jet')
+                plt.savefig(os.path.join(self.log_dir, f))
+                plt.close()
+
+
+class HolisticSegResultHook(BaseHook):
+    def __init__(self, input_size=512, overlap=24, **kwargs):
+        super().__init__(**kwargs)
+        self.input_size = input_size
+        self.overlap = overlap
+        self.margin = overlap // 2
+        self.names = []
+        self.max_xy = [0, 0]
+
+    def set_logger(self, logger):
+        self.log_dir = os.path.join(logger.logdir, 'holistic_seg_result')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        self.names.extend(out_dict['filename'])
+        for i, f in enumerate(out_dict['filename']):
+            x, y = f.split('.')[0].split('_')[2:4]
+            self.max_xy = [max(int(x), self.max_xy[0]), max(int(y), self.max_xy[1])]
+            conf = out_dict['conf_img'][i, :, :, 1].detach().cpu().numpy()
+            unc = out_dict['unc_img'][i].detach().cpu().numpy()
+            gt = (out_dict['gt_img'][i, 0] > 0).float().detach().cpu().numpy()
+            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_conf.')), conf * 255)
+            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_unc.')), unc * 255)
+            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_gt.')), gt * 255)
+            cv2.imwrite(os.path.join(self.log_dir, f), np.stack([conf, unc, gt], axis=-1) * 255)
+
+    def post_epoch(self, runner, **kwargs):
+        self.names = sorted(self.names)
+        fullmaps = {}
+        for n in self.names:
+            patch, year, x, y = n.split('.')[0].split('_')[:4]
+            name = f'{patch}_{year}'
+            if name not in fullmaps:
+                fullmaps[name] = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size, 3))
+            x = int(x) + self.margin * bool(int(x))
+            y = int(y) + self.margin * bool(int(y))
+            x0 = min(x, self.margin)
+            y0 = min(y, self.margin)
+            sx = self.input_size - self.margin - x0
+            sy = self.input_size - self.margin - y0
+            f = os.path.join(self.log_dir, n)
+            res = cv2.imread(f)
+            os.remove(f)
+            fullmaps[name][x:x + sx, y:y + sy] = res[x0:-self.margin, y0:-self.margin]
+
+        for k, v in fullmaps.items():
+            cv2.imwrite(os.path.join(self.log_dir, f'{k}.png'), v)
 
 
 

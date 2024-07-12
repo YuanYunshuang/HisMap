@@ -4,6 +4,7 @@ import numpy as np
 import json
 import torch
 import torch.nn.functional as F
+from geotiff import GeoTiff
 
 
 def plot_color_space(colors):
@@ -240,6 +241,20 @@ def boundary_to_vector(map_file, kernel_size=5):
     np.savez(map_file.split('.')[0] + '_polygon.npz', polygons=polygons)
 
 
+def read_tiff(filename):
+    geo_tiff = GeoTiff(filename)
+    tiff_array = np.array(geo_tiff.read())
+    return tiff_array
+
+
+def overlay_channels(conf_file, gt_file):
+    conf = cv2.imread(conf_file)
+    gt = cv2.imread(gt_file)
+    img = np.zeros_like(conf)
+    img[..., 2] = conf[..., 0]
+    img[..., :2] = gt[..., :2]
+    cv2.imwrite(conf_file.replace('conf', 'conf_gt'), img)
+
 
 if __name__=="__main__":
     map_path = f"/media/yuan/luna/data/HisMAP/full_map"
@@ -251,5 +266,10 @@ if __name__=="__main__":
     # img = cv2.imread(f"{map_path}/3922_2017_forest_bdry.tif")
     # cv2.imwrite(f"{map_path}/tmp.png", 255 - img[512:1024:, 512:1023])
 
-    boundary_to_vector(f"{map_path}/3922_2017_forest_bdry.tif")
-
+    # boundary_to_vector(f"{map_path}/3922_2017_forest_bdry.tif")
+    # tiff_array = read_tiff("/home/yuan/data/HisMap/Hameln/Raster_2023/3922_2023_for.tif")
+    # cv2.imwrite("/home/yuan/Downloads/tmp.png", 255 - tiff_array)
+    overlay_channels(
+        "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_conf.png",
+        "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_gt.png"
+    )

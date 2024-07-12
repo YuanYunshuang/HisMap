@@ -1,11 +1,14 @@
+import io
 import os, pathlib
 from datetime import datetime
 from collections import defaultdict, deque
 import logging
 
+import PIL
 import torch
 from functools import partial
 from rich.logging import RichHandler
+import numpy as np
 
 from src.utils.misc import ensure_dir
 
@@ -154,3 +157,13 @@ class TestLogger(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.log_fh.close()
+
+
+def plt_to_image(plt):
+    buf = io.BytesIO()
+    plt.savefig(buf, format='jpeg')
+    buf.seek(0)
+    image = PIL.Image.open(buf)
+    image = np.array(image)
+    buf.close()
+    return image

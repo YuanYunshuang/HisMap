@@ -24,6 +24,7 @@ class TrainRunner(BaseRunner):
                  run_name='default',
                  log_dir='work_dir',
                  debug=False,
+                 clip_norm=False,
                  **kwargs
                  ):
         super().__init__(**kwargs)
@@ -31,14 +32,14 @@ class TrainRunner(BaseRunner):
         self.gpu_id = 0
         self.dist = False
         self.debug = debug
+        self.clip_norm = clip_norm
         if gpus > 0:
             self.dist = True
             self.gpu_id = int(os.environ.get("LOCAL_RANK", 0))
             self.model.to_gpu(self.gpu_id)
             self.model = DDP(self.model, device_ids=[self.gpu_id])
-        self.renderer_optimizer = build_optimizer(self.model.renderer, optimizer)
-        self.spliner_optimizer = build_optimizer(self.model.spliner, optimizer)
-        self.lr_scheduler = build_lr_scheduler(self.spliner_optimizer, lr_scheduler,
+        self.optimizer = build_optimizer(self.model, optimizer)
+        self.lr_scheduler = build_lr_scheduler(self.optimizer, lr_scheduler,
                                                len(self.dataloader))
         self.total_epochs = max_epoch
         self.start_epoch = 1
@@ -80,7 +81,7 @@ class TrainRunner(BaseRunner):
                 raise IOError(f'Failed to load checkpoint from {load_path}.')
             logging.info(f"Resuming the model from checkpoint: {ckpt}")
             ckpt = torch.load(ckpt)
-            load_model_dict(self.forward_runner, ckpt['model'])
+            load_model_dict(self.model, ckpt['model'])
             if resume_from is not None:
                 self.start_epoch = ckpt['epoch'] + 1
                 self.epoch = ckpt['epoch'] + 1
@@ -119,26 +120,16 @@ class TrainRunner(BaseRunner):
 
     def run_itr(self, data):
         load_tensors_to_gpu(data, self.gpu_id)
-        self.renderer_optimizer.zero_grad()
-        self.spliner_optimizer.zero_grad()
+        self.optimizer.zero_grad()
+        data = self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
+        total_loss, loss_dict = self.model.loss(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
+        total_loss.backward()
 
-        # total_loss.backward()
+        if self.clip_norm:
+            grad_norm = clip_grads(self.model.parameters())
+            loss_dict['grad_norm'] = grad_norm
 
-        # grad_norm = clip_grads(self.model.parameters())
-        # loss_dict['grad_norm'] = grad_norm
-        # Updating parameters
-        # self.renderer_optimizer.step()
-
-        # self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
-        # total_loss, loss_dict = self.model.loss()
-        # loss_dict['render_loss'].backward()
-        # self.renderer_optimizer.step()
-
-        self.model.forward(data, epoch=self.epoch, itr=self.iter, gpu_id=self.gpu_id)
-        total_loss, loss_dict = self.model.loss()
-        loss_dict['spliner_loss'].backward()
-        self.spliner_optimizer.step()
-        self.spliner_optimizer.zero_grad()
+        self.optimizer.step()
 
         self.lr_scheduler.step_itr(self.iter + self.epoch * self.total_iter)
 

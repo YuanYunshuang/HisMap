@@ -1,5 +1,6 @@
 from .focal_loss import *
 from .l1_loss import *
+from .edl import *
 
 
 def build_loss(type, **kwargs):

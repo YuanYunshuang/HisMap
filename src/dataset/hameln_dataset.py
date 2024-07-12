@@ -1,12 +1,16 @@
+import os
 import random
 
 import cv2
+from PIL import Image
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from src.dataset.pipeline import Pipeline
 
-class HamelnDataset(Dataset):
+
+class HamelnLineDataset(Dataset):
     def __init__(self, cfgs, mode='train'):
         self.hismap = cv2.imread(cfgs['data_path'])[..., 0] / 255
         self.H, self.W = self.hismap.shape
@@ -29,5 +33,39 @@ class HamelnDataset(Dataset):
     def collate_batch(self, data):
         img = torch.from_numpy(np.stack(data, axis=0)).unsqueeze(1).float()
         return {'img': img}
+
+
+class HamelnDataset(Dataset):
+    def __init__(self, cfgs, mode='train'):
+        self.root_dir = cfgs['data_path']
+        self.mode = mode
+        self.samples = os.listdir(os.path.join(self.root_dir, 'sample'))
+        self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, item):
+        sample = Image.open(os.path.join(self.root_dir, 'sample', self.samples[item]))
+        gt = cv2.imread(os.path.join(self.root_dir, 'gt', self.samples[item]))
+        gt = (gt != 255).astype(np.uint8)
+        gt = Image.fromarray(gt)
+        data = {
+            'filename': self.samples[item],
+            'input_img': sample,
+            'gt_img': gt,
+        }
+        data = self.pipeline(data)
+        return data
+
+    def collate_batch(self, data_list):
+        data_dict = {}
+        for k in data_list[0].keys():
+            data = [x[k] for x in data_list]
+            if isinstance(data[0], torch.Tensor):
+                data_dict[k] = torch.stack([x[k] for x in data_list], dim=0)
+            else:
+                data_dict[k] = data
+        return data_dict
 
 

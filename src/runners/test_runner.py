@@ -18,7 +18,7 @@ class TestRunner(BaseRunner):
         ckpt = self.load(load_from)
         self.progress_bar = tqdm(total=self.total_iter)
         self.setup_logger(ckpt, logdir)
-        self.forward_runner.eval()
+        self.model.eval()
 
     def setup_logger(self, ckpt, logdir):
         if logdir is None:
@@ -45,7 +45,7 @@ class TestRunner(BaseRunner):
                 raise IOError('No checkpoint found.')
         logging.info(f"Resuming the model from checkpoint: {ckpt}")
         ckpt_dict = torch.load(ckpt)
-        load_model_dict(self.forward_runner, ckpt_dict['model'])
+        load_model_dict(self.model, ckpt_dict['model'])
         return ckpt
 
     def run(self):
@@ -66,7 +66,7 @@ class TestRunner(BaseRunner):
         #     print('d')
         self.hooks(self, 'pre_iter')
         load_tensors_to_gpu(data)
-        self.controller.test_forward(data)
+        self.model(data)
         self.hooks(self, 'post_iter')
         self.iter += 1
         self.progress_bar.update(1)

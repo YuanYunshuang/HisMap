@@ -273,3 +273,5 @@ if __name__=="__main__":
     #     "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_conf.png",
     #     "/home/yuan/code/HisMap/logs/default/epoch50/holistic_seg_result/full_map_gt.png"
     # )
+
+    draw_color_palette("/home/data/HisMAP/Hameln/TK_projektiv_entzerrt_1m/3821_2016.tif")

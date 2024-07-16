@@ -240,6 +240,20 @@ def py_sigmoid_focal_loss(pred: torch.Tensor,
     return loss
 
 
+def py_softmax_focal_loss(pred: torch.Tensor,
+                            target: torch.Tensor,
+                            gamma: float=2.0,
+                            alpha: float=0.25):
+
+    target = target.type_as(pred)
+    CE_loss = F.cross_entropy(pred, target, reduction='none')  # -log(pt)
+    pt = torch.exp(-CE_loss)
+
+    focal_weight = alpha * (1 - pt).pow(gamma)
+    loss = CE_loss * focal_weight
+    return loss
+
+
 class FocalLoss(BaseLoss):
 
     def __init__(self,
@@ -265,7 +279,6 @@ class FocalLoss(BaseLoss):
         :param kwargs:
         """
         super(FocalLoss, self).__init__(**kwargs)
-        assert use_sigmoid is True, 'Only sigmoid focal loss supported now.'
         self.use_sigmoid = use_sigmoid
         self.gamma = gamma
         self.alpha = alpha
@@ -273,7 +286,7 @@ class FocalLoss(BaseLoss):
         self.bg_idx = bg_idx
         if use_sigmoid:
             self.activation = 'sigmoid'
-        elif activated is False:
+        else:
             self.activation = 'softmax'
 
     def loss(self, pred: torch.Tensor, target: torch.Tensor, *args, **kwargs):
@@ -284,29 +297,33 @@ class FocalLoss(BaseLoss):
         :param kwargs:
         :return:
         """
+        num_classes = pred.size(1)
+        if self.use_sigmoid and isinstance(target, torch.cuda.FloatTensor) and target.ndim == 1:
+            target = torch.stack([1 - target, target], dim=1)
+        else:
+            target = F.one_hot(target.long(), num_classes=num_classes + 1)
+        if self.bg_idx is None:
+            target = target[:, :num_classes]
+        else:
+            target = target[:, [c for c in range(num_classes + 1) if c != self.bg_idx]]
+
         if self.use_sigmoid:
             if self.activated:
-                calculate_loss_func = py_focal_loss_with_prob
-            else:
-                num_classes = pred.size(1)
-                if isinstance(target, torch.cuda.FloatTensor) and target.ndim == 1:
-                    target = torch.stack([1 - target, target], dim=1)
-                else:
-                    target = F.one_hot(target, num_classes=num_classes + 1)
-                if self.bg_idx is None:
-                    target = target[:, :num_classes]
-                else:
-                    target = target[:, [c for c in range(num_classes + 1) if c != self.bg_idx]]
                 calculate_loss_func = py_sigmoid_focal_loss
-
-            loss_cls = calculate_loss_func(
-                pred,
-                target,
-                gamma=self.gamma,
-                alpha=self.alpha)
-
+            else:
+                calculate_loss_func = py_focal_loss_with_prob
         else:
-            raise NotImplementedError
+            if self.activated:
+                raise NotImplementedError
+            else:
+                calculate_loss_func = py_softmax_focal_loss
+
+        loss_cls = calculate_loss_func(
+            pred,
+            target,
+            gamma=self.gamma,
+            alpha=self.alpha)
+
         return loss_cls
 
 

@@ -16,7 +16,7 @@ class SegNet(nn.Module):
         x = data['input_img']
         out = self.unet(x)
         data['pred_img'] = out
-        is_edl = 'edl' in self.loss_fn.name
+        is_edl = 'edl' in self.loss_fn.name.lower()
         data['conf_img'], data['unc_img'] = pred_to_conf_unc(
             data['pred_img'].permute(0, 2, 3, 1), self.loss_fn.activation, is_edl)
         self.out_dict = data
@@ -24,10 +24,8 @@ class SegNet(nn.Module):
 
     def loss(self, data, epoch, **kwargs):
         pred = data['pred_img'].flatten(2, 3).permute(0, 2, 1).flatten(0, 1)
-        gt = (data['gt_img'][:, 0].flatten(1, 2) > 0).float().flatten(0, 1)
+        gt = data['gt_img'].flatten()
         cared = self.sample_target(gt)
-        if cared.sum() == 0:
-            cared = torch.rand_like(gt) < 0.1
         total_loss = self.loss_fn(pred[cared], gt[cared], temp=epoch)
         loss_dict = {
             'total_loss': total_loss
@@ -48,4 +46,6 @@ class SegNet(nn.Module):
                 pos_inds = torch.where(pos)[0]
                 dont_care = pos_inds[torch.randperm(len(pos_inds))[:n_pos - n_neg]]
             cared[dont_care] = False
+            if cared.sum() == 0:
+                cared = torch.rand_like(gt) < 0.1
         return cared

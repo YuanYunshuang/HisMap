@@ -47,8 +47,7 @@ class HamelnDataset(Dataset):
 
     def __getitem__(self, item):
         sample = Image.open(os.path.join(self.root_dir, 'sample', self.samples[item]))
-        gt = cv2.imread(os.path.join(self.root_dir, 'gt', self.samples[item]))
-        gt = (gt != 255).astype(np.uint8)
+        gt = cv2.imread(os.path.join(self.root_dir, 'gt', self.samples[item]), cv2.IMREAD_UNCHANGED)
         gt = Image.fromarray(gt)
         data = {
             'filename': self.samples[item],

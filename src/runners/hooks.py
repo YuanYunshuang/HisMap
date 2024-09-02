@@ -248,6 +248,7 @@ class HolisticSegResultHook(BaseHook):
         fullmap = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size))
         print(f"Stitching images for '{name}_{key}'...")
         for n in tqdm.tqdm(names):
+            x, y = n.split('.')[0].split('_')[2:4]
             x = int(x) + self.margin * bool(int(x))
             y = int(y) + self.margin * bool(int(y))
             x0 = min(x, self.margin)
@@ -257,7 +258,10 @@ class HolisticSegResultHook(BaseHook):
             f = os.path.join(self.log_dir, n)
             res = cv2.imread(f, cv2.IMREAD_UNCHANGED)
             os.remove(f)
-            fullmap[x:x + sx, y:y + sy] = res[x0:-self.margin, y0:-self.margin]
+            try:
+                fullmap[x:x + sx, y:y + sy] = res[x0:-self.margin, y0:-self.margin]
+            except:
+                print('d')
 
         cv2.imwrite(os.path.join(self.log_dir, f'{name}_{key}.png'), fullmap)
 

@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 import torch
 from torchvision.transforms import v2
-from PIL import Image
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class RemapLabels:

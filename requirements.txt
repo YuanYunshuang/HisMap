@@ -7,3 +7,5 @@ tensorboard
 rich
 geotiff
 imagecodecs
+PyYAML
+tqdm

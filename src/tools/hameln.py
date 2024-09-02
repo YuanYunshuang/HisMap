@@ -7,7 +7,7 @@ import numpy as np
 from src.tools.map_analyzer import read_tiff
 
 MAP_IDS = [3922, 3921, 3822, 3821]
-YEARS = [2017, 2011, 2005, 1996, 1992, 1986, 1982, 1978, 1974, 1960, 1955, 1952, 1945, 1936, 1925, 1898]
+YEARS = [2017, 2016, 2012, 2011, 2005, 2002, 1996, 1992, 1986, 1982, 1978, 1974, 1960, 1955, 1952, 1945, 1936, 1925, 1898]
 CATEGORY = ['for']
 
 
@@ -58,6 +58,7 @@ def generate_4cls_dataset(map_dir, raster_dir, out_dir, categories, year=None, i
             idx = np.argmin(np.abs(years - year))
             years = [years[idx]]
 
+        # get initial training labels from raster labels of 2023
         H = W = None
         raster_arr = None
         for i, category in enumerate(categories):
@@ -93,6 +94,40 @@ def generate_4cls_dataset(map_dir, raster_dir, out_dir, categories, year=None, i
                     cv2.imwrite(os.path.join(out_dir_sample, f"{id}_{cur_year}_{h}_{w}.png"), sample.astype(np.uint8))
                     if i == 0:
                         cv2.imwrite(os.path.join(out_dir_gt, f"{id}_{h}_{w}.png"), gt.astype(np.uint8))
+
+
+def generate_4cls_pseudo_labels(pred_dir, out_dir_gt, categories, img_size=512, overlap=24):
+    # out_dir_gt = os.path.join(out_dir, 'gt_pseudo')
+    os.makedirs(out_dir_gt, exist_ok=True)
+    patches = [x for x in os.listdir(pred_dir) if categories[0] in x]
+    for patch in patches:
+        id, year = os.path.splitext(patch)[0].split('_')[:2]
+        print(id, year)
+        H = W = None
+        raster_arr = None
+        for i, category in enumerate(categories):
+            rasterfile = os.path.join(pred_dir, f'{id}_{year}_{category}.png')
+            raster = cv2.imread(rasterfile, cv2.IMREAD_UNCHANGED)
+            raster = raster > 255 * 0.3
+            # cv2.imwrite(os.path.join(pred_dir, f'{id}_{year}_{category}_tmp.png'), raster_tmp.astype(np.uint8))
+            if raster_arr is None:
+                raster_arr = np.zeros_like(raster, dtype=np.uint8)
+                H, W = raster_arr.shape[:2]
+            inds = np.where(raster)
+            raster_arr[inds[0], inds[1]] = i + 1
+
+        for h in range(0, H, img_size - overlap):
+            h_end = min(h + img_size, H)
+            for w in range(0, W, img_size - overlap):
+                w_end = min(w + img_size, W)
+                gt = raster_arr[h:h_end, w:w_end]
+
+                if gt.shape[:2] != (img_size, img_size):
+                    padh = img_size - gt.shape[0]
+                    padw = img_size - gt.shape[1]
+                    gt = np.pad(gt, ((0, padh), (0, padw)), mode='constant', constant_values=0)
+
+                cv2.imwrite(os.path.join(out_dir_gt, f"{id}_{h}_{w}.png"), gt.astype(np.uint8))
 
 
 def extract_color_mask(map_dir, out_dir, year, color):
@@ -212,7 +247,8 @@ def label_map_to_rgb(map_dir, out_dir):
 
 
 if __name__=="__main__":
-    path = "/home/yuan/data/HisMap/Hameln"
+    # path = "/home/yuan/data/HisMap/Hameln"
+    path = "/media/yuan/luna/data/HisMAP/Hameln"
 
     # label_map_to_rgb(
     #     "/home/yuan/data/HisMap/Hameln/raster_rec",
@@ -221,12 +257,18 @@ if __name__=="__main__":
 
     # generate_4cls_gt(f"{path}/raster_gt", f"{path}/raster_rec")
 
-    generate_4cls_dataset(
-        f"{path}/TK_projektiv_entzerrt_1m",
-        f"{path}/Raster_2023",
-        f"{path}/seg4cls_train",
+    # generate_4cls_dataset(
+    #     f"{path}/TK_projektiv_entzerrt_1m",
+    #     f"{path}/Raster_2023",
+    #     f"{path}/seg4cls_train",
+    #     ['agr', 'for', 'wat', 'set'],
+    #     None,
+    # )
+
+    generate_4cls_pseudo_labels(
+        f"{path}/exp/seg4cls_2016/epoch20/holistic_seg_result",
+        f"{path}/seg4cls_train/gt_pseudo_2011",
         ['agr', 'for', 'wat', 'set'],
-        None,
     )
 
     # extract_color_mask(

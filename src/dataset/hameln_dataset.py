@@ -38,11 +38,14 @@ class HamelnLineDataset(Dataset):
 class HamelnDataset(Dataset):
     def __init__(self, cfgs, mode='train'):
         self.root_dir = cfgs['data_path']
+        self.gt_dir = cfgs.get('gt_dir', 'gt')
         self.mode = mode
         self.samples = os.listdir(os.path.join(self.root_dir, 'sample'))
 
         if f'{mode}_patch' in cfgs:
             self.samples = [x for x in self.samples if x.split('_')[0] in cfgs[f'{mode}_patch']]
+        if f'{mode}_year' in cfgs:
+            self.samples = [x for x in self.samples if x.split('_')[1] in cfgs[f'{mode}_year']]
 
         self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
 
@@ -54,7 +57,7 @@ class HamelnDataset(Dataset):
         gt_name = self.samples[item].split('_')
         gt_name.pop(1)
         gt_name = '_'.join(gt_name)
-        gt = cv2.imread(os.path.join(self.root_dir, 'gt', gt_name), cv2.IMREAD_UNCHANGED)
+        gt = cv2.imread(os.path.join(self.root_dir, self.gt_dir, gt_name), cv2.IMREAD_UNCHANGED)
         gt = Image.fromarray(gt)
         data = {
             'filename': self.samples[item],

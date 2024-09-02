@@ -61,6 +61,7 @@ class TestRunner(BaseRunner):
         if self.iter == self.total_iter:
             self.hooks(self, 'post_epoch')
 
+    @torch.no_grad()
     def run_itr(self, data):
         # if self.iter > 140:
         #     print('d')

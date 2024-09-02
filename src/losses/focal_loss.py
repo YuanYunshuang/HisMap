@@ -201,8 +201,10 @@ def py_focal_loss_with_prob(pred: torch.Tensor,
     :return: loss result.
     """
     num_classes = pred.size(1)
-    target = F.one_hot(target, num_classes=num_classes + 1)
-    target = target[:, :num_classes]
+    assert pred.ndim == target.ndim or pred.ndim == target.ndim + 1
+    if pred.ndim == target.ndim + 1:
+        target = F.one_hot(target, num_classes=num_classes + 1)
+        target = target[:, :num_classes]
 
     target = target.type_as(pred)
     pt = (1 - pred) * target + pred * (1 - target)
@@ -309,9 +311,9 @@ class FocalLoss(BaseLoss):
 
         if self.use_sigmoid:
             if self.activated:
-                calculate_loss_func = py_sigmoid_focal_loss
-            else:
                 calculate_loss_func = py_focal_loss_with_prob
+            else:
+                calculate_loss_func = py_sigmoid_focal_loss
         else:
             if self.activated:
                 raise NotImplementedError

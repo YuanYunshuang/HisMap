@@ -6,8 +6,8 @@ import time
 import cv2
 import numpy as np
 import torch
+import tqdm
 from torchvision.utils import make_grid
-import matplotlib.pyplot as plt
 from src.utils.logger import plt_to_image
 
 
@@ -160,12 +160,25 @@ class SegPlotWriterHook(BaseHook):
         out_dict = runner.model.out_dict
         steps = (runner.epoch - 1) * runner.total_iter + runner.iter
         if steps % self.log_every == 0:
-            fig = plt.figure(figsize=(16, 4))
-            axs = fig.subplots(1, 4)
-            axs[0].imshow(out_dict['input_img'][0].permute(1, 2, 0).detach().cpu().numpy())
-            axs[1].imshow(out_dict['conf_img'][0, :, :, 1].detach().cpu().numpy(), cmap='jet')
-            axs[2].imshow(1 - out_dict['unc_img'][0].detach().cpu().numpy(), cmap='hot')
-            axs[3].imshow((out_dict['gt_img'][0] > 0).float().permute(1, 2, 0).detach().cpu().numpy(), cmap='jet')
+            import matplotlib.pyplot as plt  # this might use main thread if imported on the top
+            rows = min(4, out_dict['input_img'].shape[0])
+            cols = max(out_dict['conf_img'].shape[-1] + 2, 4)
+            fig = plt.figure(figsize=(3*cols, 3*rows))
+            axs = fig.subplots(rows, cols)
+            for r in range(rows):
+                axs[r, 0].imshow(out_dict['input_img'][r].permute(1, 2, 0).detach().cpu().numpy()[..., ::-1])
+                axs[r, 0].set_title('input')
+                axs[r, 1].imshow((out_dict['gt_img'][r] / 4).float().permute(1, 2, 0).detach().cpu().numpy(),
+                                 cmap='jet', vmin=0, vmax=1)
+                axs[r, 1].set_title('gt')
+                axs[r, 2].imshow(1 - out_dict['unc_img'][r].detach().cpu().numpy(),
+                                 cmap='hot', vmin=0, vmax=1)
+                axs[r, 2].set_title('unc')
+                confs = out_dict['conf_img'][r].permute(2, 0, 1).detach().cpu().numpy()
+                for i, img in enumerate(confs[min(confs.shape[0] - 1, 1):, :, :]):
+                    axs[r, 3 + i].imshow(img, cmap='jet', vmin=0, vmax=1)
+                    axs[r, 3 + i].set_title(f'conf{i + 1}')
+            plt.tight_layout()
             image = plt_to_image(plt)
             plt.close()
             runner.writer.add_image(f"train/img", image, steps, dataformats='HWC')
@@ -184,6 +197,7 @@ class SaveSegResultHook(BaseHook):
         out_dict = runner.model.out_dict
         for i, f in enumerate(out_dict['filename']):
             if i % self.save_every == 0:
+                import matplotlib.pyplot as plt
                 fig = plt.figure(figsize=(15, 5))
                 axs = fig.subplots(1, 4)
                 axs[0].imshow(out_dict['input_img'][0].permute(1, 2, 0).detach().cpu().numpy())
@@ -200,8 +214,10 @@ class HolisticSegResultHook(BaseHook):
         self.input_size = input_size
         self.overlap = overlap
         self.margin = overlap // 2
-        self.names = []
+        self.maps = set()
         self.max_xy = [0, 0]
+        self.conf_channels = kwargs.get('conf_channels',
+                                        ['bg', 'agr', 'for', 'wat', 'set'])
 
     def set_logger(self, logger):
         self.log_dir = os.path.join(logger.logdir, 'holistic_seg_result')
@@ -209,26 +225,29 @@ class HolisticSegResultHook(BaseHook):
 
     def post_iter(self, runner, **kwargs):
         out_dict = runner.model.out_dict
-        self.names.extend(out_dict['filename'])
+        self.maps = self.maps | set(['_'.join(x.split('_')[:2]) for x in out_dict['filename']])
         for i, f in enumerate(out_dict['filename']):
             x, y = f.split('.')[0].split('_')[2:4]
             self.max_xy = [max(int(x), self.max_xy[0]), max(int(y), self.max_xy[1])]
-            conf = out_dict['conf_img'][i, :, :, 1].detach().cpu().numpy()
+            conf = out_dict['conf_img'][i, :, :].detach().cpu().numpy()
             unc = out_dict['unc_img'][i].detach().cpu().numpy()
-            gt = (out_dict['gt_img'][i, 0] > 0).float().detach().cpu().numpy()
-            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_conf.')), conf * 255)
-            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_unc.')), unc * 255)
-            # cv2.imwrite(os.path.join(self.log_dir, f.replace('.', '_gt.')), gt * 255)
-            cv2.imwrite(os.path.join(self.log_dir, f), np.stack([conf, unc, gt], axis=-1) * 255)
+            for c, k in enumerate(self.conf_channels):
+                cv2.imwrite(os.path.join(self.log_dir, f.replace('.png', f'_{k}.png')),
+                            conf[..., c] * 255)
+            cv2.imwrite(os.path.join(self.log_dir, f.replace('.png', f'_unc.png')), unc * 255)
 
     def post_epoch(self, runner, **kwargs):
-        self.names = sorted(self.names)
-        fullmaps = {}
-        for n in self.names:
-            patch, year, x, y = n.split('.')[0].split('_')[:4]
-            name = f'{patch}_{year}'
-            if name not in fullmaps:
-                fullmaps[name] = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size, 3))
+        names = os.listdir(self.log_dir)
+        for m in self.maps:
+            for k in self.conf_channels + ['unc']:
+                self.stitch(k, [n for n in names if (f'{k}.png' in n) and (m in n)])
+
+    def stitch(self, key, names):
+        patch, year, x, y = names[0].split('.')[0].split('_')[:4]
+        name = f'{patch}_{year}'
+        fullmap = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size))
+        print(f"Stitching images for '{name}_{key}'...")
+        for n in tqdm.tqdm(names):
             x = int(x) + self.margin * bool(int(x))
             y = int(y) + self.margin * bool(int(y))
             x0 = min(x, self.margin)
@@ -236,12 +255,12 @@ class HolisticSegResultHook(BaseHook):
             sx = self.input_size - self.margin - x0
             sy = self.input_size - self.margin - y0
             f = os.path.join(self.log_dir, n)
-            res = cv2.imread(f)
+            res = cv2.imread(f, cv2.IMREAD_UNCHANGED)
             os.remove(f)
-            fullmaps[name][x:x + sx, y:y + sy] = res[x0:-self.margin, y0:-self.margin]
+            fullmap[x:x + sx, y:y + sy] = res[x0:-self.margin, y0:-self.margin]
 
-        for k, v in fullmaps.items():
-            cv2.imwrite(os.path.join(self.log_dir, f'{k}.png'), v)
+        cv2.imwrite(os.path.join(self.log_dir, f'{name}_{key}.png'), fullmap)
+
 
 
 

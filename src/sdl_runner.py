@@ -55,7 +55,7 @@ class SupervisedRunner:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./config/config.yaml")
+    parser.add_argument("--config", type=str)
     parser.add_argument("--mode", type=str, default="train",
                         help="train | test")
     parser.add_argument("--resume-from", type=str)
@@ -72,6 +72,14 @@ if __name__ == "__main__":
 
     setup_logger(args.run_name, args.debug)
     seed_everything(2023)
+    if args.config is None:
+        assert args.load_from is not None or args.resume_from is not None
+        if args.load_from is not None:
+            args.config = os.path.join(args.load_from, "config.yaml")
+        elif args.resume_from is not None:
+            args.config = os.path.join(args.resume_from, "config.yaml")
+        else:
+            raise ValueError("Either --config or --load-from or --resume-from must be specified.")
     cfgs = load_config(args)
     if args.gpus:
         cfgs['TRAIN']['gpus'] = args.gpus

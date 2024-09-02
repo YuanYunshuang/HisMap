@@ -1,7 +1,23 @@
 import cv2
+import numpy as np
 import torch
 from torchvision.transforms import v2
 from PIL import Image
+
+
+class RemapLabels:
+    def __init__(self, src_label, tgt_label):
+        self.src_label = src_label
+        self.tgt_label = tgt_label
+
+    def __call__(self, data_dict):
+        gt = np.array(data_dict['gt_img'])
+        new_gt = np.zeros_like(gt)
+        for i, l in enumerate(self.tgt_label):
+            idx = self.src_label.index(l)
+            new_gt[gt==idx+1] = i + 1
+        data_dict['gt_img'] = Image.fromarray(new_gt)
+        return data_dict
 
 
 class FlipRotImage:

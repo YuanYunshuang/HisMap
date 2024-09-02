@@ -1,0 +1,53 @@
+DATASET:
+  dataset: hameln
+  name: hameln
+  data_path: /home/yuan/data/HisMap/Hameln/seg4cls_train
+  mode: train
+  batch_size: 16
+  n_workers: 4
+  gpus: 0
+  img_size: 512
+
+  train_pipeline:
+    - FlipRotImage: {}
+    - FormatImage: {}
+  test_pipeline:
+    - FormatImage: {}
+
+TRAIN:
+  log_every: 10
+  max_epoch: 50
+  gpus: 0
+  hooks: 'pycfg.base.hooks.train_hooks'
+  optimizer:
+    lr: 0.0002
+    weight_decay: 1e-2
+    betas: [0.9, 0.98]
+  lr_scheduler:
+    policy: 'MultiStepLR'
+    milestones: [20, 45]
+    gamma: 0.1
+
+TEST:
+  hooks: 'pycfg.base.hooks.test_hooks'
+
+
+MODEL:
+  type: 'segnet.SegNet'
+  num_classes: 5
+  loss_cfg:
+    type: EDLLoss
+    n_cls: 5
+    annealing_step: 40
+    activation: relu
+    use_focal: true
+
+
+
+
+
+
+
+
+
+

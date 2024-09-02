@@ -40,6 +40,10 @@ class HamelnDataset(Dataset):
         self.root_dir = cfgs['data_path']
         self.mode = mode
         self.samples = os.listdir(os.path.join(self.root_dir, 'sample'))
+
+        if f'{mode}_patch' in cfgs:
+            self.samples = [x for x in self.samples if x.split('_')[0] in cfgs[f'{mode}_patch']]
+
         self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
 
     def __len__(self):
@@ -47,7 +51,10 @@ class HamelnDataset(Dataset):
 
     def __getitem__(self, item):
         sample = Image.open(os.path.join(self.root_dir, 'sample', self.samples[item]))
-        gt = cv2.imread(os.path.join(self.root_dir, 'gt', self.samples[item]), cv2.IMREAD_UNCHANGED)
+        gt_name = self.samples[item].split('_')
+        gt_name.pop(1)
+        gt_name = '_'.join(gt_name)
+        gt = cv2.imread(os.path.join(self.root_dir, 'gt', gt_name), cv2.IMREAD_UNCHANGED)
         gt = Image.fromarray(gt)
         data = {
             'filename': self.samples[item],

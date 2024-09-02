@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn.functional as F
 
@@ -145,8 +147,8 @@ def pred_to_conf_unc(preds, activation='relu', edl=True):
         unc = unc.squeeze(dim=-1)
     else:
         # use entropy as uncertainty
-        entropy = -evidence * torch.log2(evidence)
-        unc = entropy.sum(dim=-1)
+        entropy = -evidence * torch.log(evidence)
+        unc = entropy.sum(dim=-1) / math.log(evidence.shape[-1])
         # conf = torch.sqrt(evidence * (1 - unc.unsqueeze(-1)))
         conf = evidence
         if activation == 'sigmoid':
@@ -159,6 +161,7 @@ class EDLLoss(BaseLoss):
     def __init__(self,
                  n_cls: int,
                  annealing_step: int,
+                 use_focal: False,
                  **kwargs):
         """
         Evidential loss.
@@ -170,6 +173,7 @@ class EDLLoss(BaseLoss):
         super().__init__(**kwargs)
         self.n_cls = n_cls
         self.annealing_step = annealing_step
+        self.use_focal = use_focal
         if self.activation == 'relu':
             self.activation = relu_evidence
         elif self.activation == 'exp':
@@ -196,5 +200,8 @@ class EDLLoss(BaseLoss):
         alpha = evidence + 1
         n_cls = self.n_cls if n_cls_override is None else n_cls_override
         loss = mse_loss(tgt_onehot, alpha, temp, n_cls, self.annealing_step)
-
+        if self.use_focal:
+            conf, _ = pred_to_conf_unc(evidence, activation='none')
+            focal_weight = (1 - torch.gather(conf, dim=1, index=tgt.long().unsqueeze(1))) ** 2
+            loss = loss * focal_weight
         return loss

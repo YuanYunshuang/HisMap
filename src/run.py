@@ -52,49 +52,47 @@ if __name__ == "__main__":
     path = "/media/yuan/luna/data/HisMAP/Hameln"
     exps = ['2002_2005', '1995_1996', '1991_1992', '1985_1986', '1982_1983', '1978', '1974_1975',
             '1960_1961', '1952_1955', '1941_1945', '1936_1937', '1923_1926', '1914_1919', '1897_1898']
-    last_years = '2011_2012'
-    for i in range(len(exps)):
+    last_years = '2002_2005'
+    for i in range(0, len(exps[1:]) - 1):
         years = exps[i]
         next_years = exps[i + 1]
-        args_ = copy.deepcopy(args)
-        cfgs_ = copy.deepcopy(cfgs)
-        args_.log_dir = args_.load_from
+        args.log_dir = args.load_from
 
         # copy data
-        exp_dir = args_.log_dir.replace(last_years, years)
+        exp_dir = args.log_dir.replace(last_years, years)
         os.makedirs(exp_dir, exist_ok=True)
-        shutil.copy(os.path.join(args_.log_dir, 'epoch20.pth'), os.path.join(exp_dir, 'epoch0.pth'))
+        shutil.copy(os.path.join(args.log_dir, 'epoch20.pth'), os.path.join(exp_dir, 'epoch0.pth'))
 
         # train
-        args_.mode = 'train'
-        args_.log_dir = exp_dir
-        args_.config = os.path.join(exp_dir, 'config.yaml')
-        args_.load_from = exp_dir
-        cfgs_['TRAIN']['run_name'] = None
-        cfgs_['TRAIN']['load_from'] = args_.load_from
-        cfgs_['TRAIN']['log_dir'] = args_.load_from
-        cfgs_['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
+        args.mode = 'train'
+        args.log_dir = exp_dir
+        args.config = os.path.join(exp_dir, 'config.yaml')
+        args.load_from = exp_dir
+        cfgs['TRAIN']['run_name'] = None
+        cfgs['TRAIN']['load_from'] = args.load_from
+        cfgs['TRAIN']['log_dir'] = args.load_from
+        cfgs['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
         train_years = []
         tmp = next_years.split('_')
         train_years.extend(np.arange(int(tmp[0]), int(tmp[1]) + 1).tolist())
         tmp = years.split('_')
         train_years.extend(np.arange(int(tmp[0]), int(tmp[1]) + 1).tolist())
         train_years = [str(x) for x in train_years]
-        cfgs_['TRAIN']['train_year'] = train_years
-        sdl_runner = SupervisedRunner(args_, cfgs_)
-        save_config(cfgs_, sdl_runner.runner.logdir)
+        cfgs['TRAIN']['train_year'] = train_years
+        sdl_runner = SupervisedRunner(args, cfgs)
+        save_config(cfgs, sdl_runner.runner.logdir)
         sdl_runner.run()
 
         # test
-        args_.mode = 'test'
-        args_.log_dir = args_.load_from
-        cfgs_['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
-        cfgs_['TEST']['load_from'] = args_.load_from
-        cfgs_['TEST']['log_dir'] = args_.load_from
+        args.mode = 'test'
+        args.log_dir = args.load_from
+        cfgs['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
+        cfgs['TEST']['load_from'] = args.load_from
+        cfgs['TEST']['log_dir'] = args.load_from
         tmp = next_years.split('_')
         test_years = np.arange(int(tmp[0]), int(tmp[1]) + 1).tolist()
         test_years = [str(x) for x in test_years]
-        sdl_runner = SupervisedRunner(args_, cfgs_)
+        sdl_runner = SupervisedRunner(args, cfgs)
         sdl_runner.run()
 
         # generate pseudo labels

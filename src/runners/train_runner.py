@@ -54,9 +54,12 @@ class TrainRunner(BaseRunner):
             else:
                 log_path = resume_from
         else:
-            now = datetime.now().strftime('%m-%d-%H-%M-%S')
-            run_name = run_name + '_' + now
-            log_path = os.path.join(log_dir, run_name)
+            if run_name is None:
+                log_path = log_dir
+            else:
+                now = datetime.now().strftime('%m-%d-%H-%M-%S')
+                run_name = run_name + '_' + now
+                log_path = os.path.join(log_dir, run_name)
             ensure_dir(log_path)
         self.logger = LogMeter(self.total_iter, log_path, log_every=self.log_every)
         self.writer = SummaryWriter(log_path)

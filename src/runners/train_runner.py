@@ -83,7 +83,7 @@ class TrainRunner(BaseRunner):
             else:
                 raise IOError(f'Failed to load checkpoint from {load_path}.')
             logging.info(f"Resuming the model from checkpoint: {ckpt}")
-            ckpt = torch.load(ckpt)
+            ckpt = torch.load(ckpt, weights_only=True)
             load_model_dict(self.model, ckpt['model'])
             if resume_from is not None:
                 self.start_epoch = ckpt['epoch'] + 1

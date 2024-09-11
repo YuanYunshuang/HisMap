@@ -47,6 +47,8 @@ class HamelnDataset(Dataset):
         if f'{mode}_year' in cfgs:
             self.samples = [x for x in self.samples if x.split('_')[1] in cfgs[f'{mode}_year']]
 
+        print("Loaded {} samples".format(len(self.samples)))
+
         self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
 
     def __len__(self):
@@ -57,7 +59,9 @@ class HamelnDataset(Dataset):
         gt_name = self.samples[item].split('_')
         gt_name.pop(1)
         gt_name = '_'.join(gt_name)
-        gt = cv2.imread(os.path.join(self.root_dir, self.gt_dir, gt_name), cv2.IMREAD_UNCHANGED)
+        filename = os.path.join(self.root_dir, self.gt_dir, gt_name)
+        assert os.path.exists(filename), '{} does not exist'.format(filename)
+        gt = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         gt = Image.fromarray(gt)
         data = {
             'filename': self.samples[item],

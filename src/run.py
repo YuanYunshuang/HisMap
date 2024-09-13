@@ -60,15 +60,15 @@ if __name__ == "__main__":
 
     path = "/media/yuan/luna/data/HisMAP/Hameln"
     exps = [
-        '2016_2017',
-        '2011_2012',
-        '2002_2005',
-        '1995_1996',
-        '1991_1992',
-        '1985_1986',
-        '1982_1983',
-        '1978',
-        '1974_1975',  # no 3821
+        # '2016_2017',
+        # '2011_2012',
+        # '2002_2005',
+        # '1995_1996',
+        # '1991_1992',
+        # '1985_1986',
+        # '1982_1983',
+        # '1978',
+        '1974_1975',  # no 3921
         '1960_1961',
         '1952_1955',
         '1941_1945',
@@ -89,19 +89,19 @@ if __name__ == "__main__":
         os.makedirs(exp_dir, exist_ok=True)
         shutil.copy(os.path.join(log_dir + ckpt_key, 'epoch50.pth'), os.path.join(exp_dir, 'epoch0.pth'))
         if years == '1974_1975':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4_cls_train/gt_pseudo_1978/3821*.png')
+            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1978/3921*.png')
             for f in files:
                 shutil.copy(f, f.replace('1978', '1974_1975'))
         if years == '1936_1937':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4_cls_train/gt_pseudo_1941_1945/3822*.png')
+            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1941_1945/3822*.png')
             for f in files:
                 shutil.copy(f, f.replace('1941_1945', '1936_1937'))
         if years == '1923_1926':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4_cls_train/gt_pseudo_1936_1937/3821*.png')
+            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1936_1937/3821*.png')
             for f in files:
                 shutil.copy(f, f.replace('1936_1937', '1923_1926'))
         if years == '1914_1919':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4_cls_train/gt_pseudo_1923_1926/392*.png')
+            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1923_1926/392*.png')
             for f in files:
                 shutil.copy(f, f.replace('1923_1926', '1914_1919'))
 

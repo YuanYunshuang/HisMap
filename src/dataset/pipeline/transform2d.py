@@ -57,6 +57,8 @@ class FormatImage:
                     data_dict[k] = self.transforms_input(v)
                 elif 'gt' in k:
                     data_dict[k] = self.transforms_gt(v)
+                    if data_dict[k].ndim == 3:
+                        data_dict[k] /= 255
                 else:
                     raise ValueError(f'Unexpected key {k}')
         # img_keys = [k for k in data_dict.keys() if 'img' in k]

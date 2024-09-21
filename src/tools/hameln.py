@@ -130,25 +130,25 @@ def generate_4cls_pseudo_labels(pred_dir, out_dir_gt, categories, img_size=512, 
                 cv2.imwrite(os.path.join(out_dir_gt, f"{id}_{h}_{w}.png"), gt.astype(np.uint8))
 
 
-def generate_4cls_softpseudo_labels(pred_dir, out_dir_gt, categories, img_size=512, overlap=24, thr=0.5):
+def generate_4cls_softpseudo_labels(pred_dir, out_dir_gt, categories, img_size=512, overlap=24, years=None):
     # out_dir_gt = os.path.join(out_dir, 'gt_pseudo')
     os.makedirs(out_dir_gt, exist_ok=True)
     patches = [x for x in os.listdir(pred_dir) if categories[0] in x]
     for patch in patches:
         id, year = os.path.splitext(patch)[0].split('_')[:2]
+        if years is not None and not year in years:
+            continue
         print(id, year)
         H = W = None
         raster_arr = None
         for i, category in enumerate(categories):
             rasterfile = os.path.join(pred_dir, f'{id}_{year}_{category}.png')
             raster = cv2.imread(rasterfile, cv2.IMREAD_UNCHANGED)
-            raster = raster > 255 * thr
             # cv2.imwrite(os.path.join(pred_dir, f'{id}_{year}_{category}_tmp.png'), raster_tmp.astype(np.uint8))
             if raster_arr is None:
-                raster_arr = np.zeros_like(raster, dtype=np.uint8)
+                raster_arr = np.zeros((raster.shape[0], raster.shape[1], 4), dtype=np.uint8)
                 H, W = raster_arr.shape[:2]
-            inds = np.where(raster)
-            raster_arr[inds[0], inds[1]] = i + 1
+            raster_arr[..., i] = raster
 
         for h in range(0, H, img_size - overlap):
             h_end = min(h + img_size, H)
@@ -159,7 +159,7 @@ def generate_4cls_softpseudo_labels(pred_dir, out_dir_gt, categories, img_size=5
                 if gt.shape[:2] != (img_size, img_size):
                     padh = img_size - gt.shape[0]
                     padw = img_size - gt.shape[1]
-                    gt = np.pad(gt, ((0, padh), (0, padw)), mode='constant', constant_values=0)
+                    gt = np.pad(gt, ((0, padh), (0, padw), (0, 0)), mode='constant', constant_values=0)
 
                 cv2.imwrite(os.path.join(out_dir_gt, f"{id}_{h}_{w}.png"), gt.astype(np.uint8))
 
@@ -299,10 +299,11 @@ if __name__=="__main__":
     #     None,
     # )
 
-    generate_4cls_pseudo_labels(
-        f"{path}/exp/seg4cls_all/epoch50/holistic_seg_result",
-        f"{path}/seg4cls_train/gt_pseudo_2016_2017",
+    generate_4cls_softpseudo_labels(
+        f"{path}/exp_0.5/seg4cls_all/epoch50/holistic_seg_result",
+        f"{path}/seg4cls_train_soft/gt_pseudo_2016_2017",
         ['agr', 'for', 'wat', 'set'],
+        years=['2016', '2017']
     )
 
     # extract_color_mask(

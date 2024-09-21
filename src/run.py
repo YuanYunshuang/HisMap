@@ -9,7 +9,7 @@ from src.utils.misc import setup_logger
 from src.config import load_config, save_config
 from src.utils.train_utils import seed_everything
 from src.sdl_runner import SupervisedRunner
-from src.tools.hameln import generate_4cls_pseudo_labels
+from src.tools.hameln import generate_4cls_pseudo_labels, generate_4cls_softpseudo_labels
 
 
 def parse_years(years):
@@ -61,13 +61,13 @@ if __name__ == "__main__":
     path = "/media/yuan/luna/data/HisMAP/Hameln"
     exps = [
         # '2016_2017',
-        # '2011_2012',
-        # '2002_2005',
-        # '1995_1996',
-        # '1991_1992',
-        # '1985_1986',
-        # '1982_1983',
-        # '1978',
+        '2011_2012',
+        '2002_2005',
+        '1995_1996',
+        '1991_1992',
+        '1985_1986',
+        '1982_1983',
+        '1978',
         '1974_1975',  # no 3921
         '1960_1961',
         '1952_1955',
@@ -77,8 +77,12 @@ if __name__ == "__main__":
         '1914_1919', # no 3921, 3922
         '1897_1898'
     ]
+
+    missing_patches = {
+            '1974_1975': '3921', '1936_1937': '3822', '1923_1926': '3821', '1914_1919': '392'
+        }
     ckpt_key = 'all'
-    log_dir = '/media/yuan/luna/data/HisMAP/Hameln/exp/seg4cls_'
+    log_dir = '/media/yuan/luna/data/HisMAP/Hameln/exp_soft/seg4cls_'
     max_epoch = 10
     for i in range(len(exps) - 1):
         years = exps[i]
@@ -88,22 +92,13 @@ if __name__ == "__main__":
         exp_dir = log_dir + years
         os.makedirs(exp_dir, exist_ok=True)
         shutil.copy(os.path.join(log_dir + ckpt_key, 'epoch50.pth'), os.path.join(exp_dir, 'epoch0.pth'))
-        if years == '1974_1975':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1978/3921*.png')
+
+        if years in missing_patches:
+            missing_patch = missing_patches[years]
+            src_dir = exps[exps.index(years) - 1]
+            files = glob.glob(f'{path}/seg4cls_train_soft/gt_pseudo_{src_dir}/{missing_patch}*.png')
             for f in files:
-                shutil.copy(f, f.replace('1978', '1974_1975'))
-        if years == '1936_1937':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1941_1945/3822*.png')
-            for f in files:
-                shutil.copy(f, f.replace('1941_1945', '1936_1937'))
-        if years == '1923_1926':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1936_1937/3821*.png')
-            for f in files:
-                shutil.copy(f, f.replace('1936_1937', '1923_1926'))
-        if years == '1914_1919':
-            files = glob.glob(f'/media/yuan/luna/data/HisMAP/Hameln/seg4cls_train/gt_pseudo_1923_1926/392*.png')
-            for f in files:
-                shutil.copy(f, f.replace('1923_1926', '1914_1919'))
+                shutil.copy(f, f.replace(src_dir, years))
 
 
         # train
@@ -118,9 +113,10 @@ if __name__ == "__main__":
         cfgs['TRAIN']['max_epoch'] = max_epoch
         cfgs['TRAIN']['lr_scheduler']['milestones'] = [5]
         cfgs['TRAIN']['optimizer']['lr'] = 0.00002
-        cfgs['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
+        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_soft/gt_pseudo_{years}'
         train_years = parse_years(next_years) + parse_years(years)
         cfgs['DATASET']['train_year'] = train_years
+        cfgs['DATASET']['data_path'] = '/media/yuan/luna/data/HisMAP/Hameln/train_data'
         ss = "=======TRAIN=======\n"
         ss += f"LOG_DIR: {exp_dir}\n"
         ss += f"TRAIN_YEARS: {train_years}\n"
@@ -133,7 +129,7 @@ if __name__ == "__main__":
         # test
         args.mode = 'test'
         args.log_dir = args.load_from
-        cfgs['DATASET']['gt_dir'] = f'gt_pseudo_{years}'
+        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_soft/gt_pseudo_{years}'
         cfgs['TEST']['load_from'] = args.load_from
         cfgs['TEST']['log_dir'] = args.load_from
         test_years = parse_years(next_years)
@@ -151,11 +147,11 @@ if __name__ == "__main__":
         ss += f"PRED_dir: seg4cls_{years}\n"
         ss += f"OUT_DIR: gt_pseudo_{next_years}"
         print(ss)
-        generate_4cls_pseudo_labels(
-            f"{path}/exp/seg4cls_{years}/epoch{max_epoch}/holistic_seg_result",
-            f"{path}/seg4cls_train/gt_pseudo_{next_years}",
+        generate_4cls_softpseudo_labels(
+            f"{path}/exp_soft/seg4cls_{years}/epoch{max_epoch}/holistic_seg_result",
+            f"{path}/seg4cls_train_soft/gt_pseudo_{next_years}",
             ['agr', 'for', 'wat', 'set'],
-            thr=0.4
+            # thr=0.4
         )
 
-        # last_years = years
+        last_years = years

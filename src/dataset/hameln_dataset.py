@@ -59,7 +59,7 @@ class HamelnDataset(Dataset):
         gt_name = self.samples[item].split('_')
         gt_name.pop(1)
         gt_name = '_'.join(gt_name)
-        filename = os.path.join(self.root_dir, self.gt_dir, gt_name)
+        filename = os.path.join( self.gt_dir, gt_name)
         assert os.path.exists(filename), '{} does not exist'.format(filename)
         gt = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         gt = Image.fromarray(gt)

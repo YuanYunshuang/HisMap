@@ -24,8 +24,13 @@ class SegNet(nn.Module):
 
     def loss(self, data, epoch, **kwargs):
         pred = data['pred_img'].flatten(2, 3).permute(0, 2, 1).flatten(0, 1)
-        gt = data['gt_img'].flatten()
-        cared = self.sample_target(gt)
+        gt = data['gt_img']
+        if gt.ndim == 3:
+            gt = gt.flatten()
+            cared = self.sample_target(gt)
+        else:
+            gt = gt.permute(0, 2, 3, 1).flatten(0, 2)
+            cared = torch.ones_like(gt[:, 0]).bool()
         total_loss = self.loss_fn(pred[cared], gt[cared], temp=epoch)
         loss_dict = {
             'total_loss': total_loss

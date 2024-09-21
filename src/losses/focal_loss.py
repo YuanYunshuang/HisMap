@@ -300,10 +300,15 @@ class FocalLoss(BaseLoss):
         :return:
         """
         num_classes = pred.size(1)
-        if self.use_sigmoid and isinstance(target, torch.cuda.FloatTensor) and target.ndim == 1:
-            target = torch.stack([1 - target, target], dim=1)
+        if self.use_sigmoid and isinstance(target, torch.cuda.FloatTensor):
+            target = torch.stack([1 - target, target], dim=-1)
         else:
-            target = F.one_hot(target.long(), num_classes=num_classes + 1)
+            if target.ndim == 1:
+                target = F.one_hot(target.long(), num_classes=num_classes + 1)
+            elif target.shape[-1] == num_classes - 1:
+                target = torch.cat([1 - target.sum(dim=-1, keepdim=True), target], dim=-1)
+            else:
+                assert target.shape[-1] == num_classes
         if self.bg_idx is None:
             target = target[:, :num_classes]
         else:

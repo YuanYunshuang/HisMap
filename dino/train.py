@@ -15,7 +15,7 @@ from torchvision import models as torchvision_models
 
 from dino import utils, augmentation, loss
 import vision_transformer as vits
-from hameln import HamelnDataset
+from hameln import HamelnTemporalDataset
 
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
@@ -37,7 +37,7 @@ def get_args_parser():
         values leads to better performance but requires more memory. Applies only
         for ViTs (vit_tiny, vit_small and vit_base). If <16, we recommend disabling
         mixed precision training (--use_fp16 false) to avoid unstabilities.""")
-    parser.add_argument('--out_dim', default=2048, type=int, help="""Dimensionality of
+    parser.add_argument('--out_dim', default=1024, type=int, help="""Dimensionality of
         the DINO head output. For complex and large datasets large values (like 65k) work well.""")
     parser.add_argument('--norm_last_layer', default=True, type=utils.bool_flag,
         help="""Whether or not to weight normalize the last layer of the DINO head.
@@ -72,7 +72,7 @@ def get_args_parser():
     parser.add_argument('--clip_grad', type=float, default=3.0, help="""Maximal parameter
         gradient norm if using gradient clipping. Clipping with norm .3 ~ 1.0 can
         help optimization for larger ViT architectures. 0 for disabling.""")
-    parser.add_argument('--batch_size_per_gpu', default=64, type=int,
+    parser.add_argument('--batch_size_per_gpu', default=16, type=int,
         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
     parser.add_argument('--epochs', default=100, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
@@ -124,14 +124,14 @@ def train_dino(args):
     cudnn.benchmark = True
 
     # ============ preparing data ... ============
-    transform = augmentation.DataAugmentationDINO(
+    transform = augmentation.DataAugmentationHameln(
         args.global_crops_scale,
         args.local_crops_scale,
         args.local_crops_number,
     )
 
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
-    dataset = HamelnDataset(args.data_path, transform=transform)
+    dataset = HamelnTemporalDataset(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True) if args.distributed else None
     data_loader = torch.utils.data.DataLoader(
         dataset,
@@ -140,6 +140,7 @@ def train_dino(args):
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
+        # collate_fn=dataset.collate_batch,
     )
     print(f"Data loaded: there are {len(dataset)} images.")
 
@@ -299,7 +300,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                     fp16_scaler, args):
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
-    for it, (images, _) in enumerate(metric_logger.log_every(data_loader, 10, header)):
+    for it, images in enumerate(metric_logger.log_every(data_loader, 10, header)):
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
         for i, param_group in enumerate(optimizer.param_groups):
@@ -308,11 +309,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 param_group["weight_decay"] = wd_schedule[it]
 
         # move images to gpu
-        images = [im.cuda(non_blocking=True) for im in images]
+        images = images.cuda(non_blocking=True)
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
-            teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
-            student_output = student(images)
+            teacher_output = teacher(images[:, :-1].flatten(0, 1))  # only the 2 global views pass through the teacher
+            student_output = student(images[:, 1:].flatten(0, 1))
             loss = dino_loss(student_output, teacher_output, epoch)
 
         if not math.isfinite(loss.item()):

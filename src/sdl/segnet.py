@@ -30,7 +30,10 @@ class SegNet(nn.Module):
             cared = self.sample_target(gt)
         else:
             gt = gt.permute(0, 2, 3, 1).flatten(0, 2)
-            cared = torch.ones_like(gt[:, 0]).bool()
+            pos = gt.max(dim=-1).values > 0.6
+            neg = gt.max(dim=-1).values < 0.4
+            cared = torch.logical_or(pos, neg)
+
         total_loss = self.loss_fn(pred[cared], gt[cared], temp=epoch)
         loss_dict = {
             'total_loss': total_loss

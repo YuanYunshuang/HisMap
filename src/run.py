@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     path = "/media/yuan/luna/data/HisMAP/Hameln"
     exps = [
-        # '2016_2017',
+        '2016_2017',
         '2011_2012',
         '2002_2005',
         '1995_1996',
@@ -82,7 +82,8 @@ if __name__ == "__main__":
             '1974_1975': '3921', '1936_1937': '3822', '1923_1926': '3821', '1914_1919': '392'
         }
     ckpt_key = 'all'
-    log_dir = '/media/yuan/luna/data/HisMAP/Hameln/exp_soft/seg4cls_'
+    exp_key = 'drop'
+    log_dir = f'/media/yuan/luna/data/HisMAP/Hameln/exp_{exp_key}/seg4cls_'
     max_epoch = 10
     for i in range(len(exps) - 1):
         years = exps[i]
@@ -96,7 +97,7 @@ if __name__ == "__main__":
         if years in missing_patches:
             missing_patch = missing_patches[years]
             src_dir = exps[exps.index(years) - 1]
-            files = glob.glob(f'{path}/seg4cls_train_soft/gt_pseudo_{src_dir}/{missing_patch}*.png')
+            files = glob.glob(f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{src_dir}/{missing_patch}*.png')
             for f in files:
                 shutil.copy(f, f.replace(src_dir, years))
 
@@ -113,7 +114,7 @@ if __name__ == "__main__":
         cfgs['TRAIN']['max_epoch'] = max_epoch
         cfgs['TRAIN']['lr_scheduler']['milestones'] = [5]
         cfgs['TRAIN']['optimizer']['lr'] = 0.00002
-        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_soft/gt_pseudo_{years}'
+        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{years}'
         train_years = parse_years(next_years) + parse_years(years)
         cfgs['DATASET']['train_year'] = train_years
         cfgs['DATASET']['data_path'] = '/media/yuan/luna/data/HisMAP/Hameln/train_data'
@@ -129,7 +130,7 @@ if __name__ == "__main__":
         # test
         args.mode = 'test'
         args.log_dir = args.load_from
-        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_soft/gt_pseudo_{years}'
+        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{years}'
         cfgs['TEST']['load_from'] = args.load_from
         cfgs['TEST']['log_dir'] = args.load_from
         test_years = parse_years(next_years)
@@ -148,8 +149,8 @@ if __name__ == "__main__":
         ss += f"OUT_DIR: gt_pseudo_{next_years}"
         print(ss)
         generate_4cls_softpseudo_labels(
-            f"{path}/exp_soft/seg4cls_{years}/epoch{max_epoch}/holistic_seg_result",
-            f"{path}/seg4cls_train_soft/gt_pseudo_{next_years}",
+            f"{path}/exp_{exp_key}/seg4cls_{years}/epoch{max_epoch}/holistic_seg_result",
+            f"{path}/seg4cls_train_{exp_key}/gt_pseudo_{next_years}",
             ['agr', 'for', 'wat', 'set'],
             # thr=0.4
         )

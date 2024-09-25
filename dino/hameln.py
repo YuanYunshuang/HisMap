@@ -40,51 +40,41 @@ class HamelnDataset(Dataset):
 
 class HamelnTemporalDataset(Dataset):
     def __init__(self, root, transform):
-        self.parse_maps(root)
-        self.samples = glob.glob(os.path.join(root, "*.png"))
+        self.samples = [self.sample_name(x) for x in os.listdir(os.path.join(root, "sample"))]
+        self.samples = list(set(self.samples))
+        self.root = root
         self.transform = transform
         self.loader = default_loader
 
-    def parse_maps(self, root):
-        files = glob.glob(os.path.join(root, "*.tif"))
-        maps = {'3922': [], '3921': [], '3822': [], '3821': []}
-        years = {'3922': [], '3921': [], '3822': [], '3821': []}
-        for f in tqdm.tqdm(files):
-            try:
-                patch, year = os.path.basename(f).split('.')[0].split('_')
-            except:
-                continue
-            m = read_tiff(f)
-            maps[patch].append(cv2.cvtColor(m, cv2.COLOR_BGR2GRAY))
-            years[patch].append(year)
-
-        for k, v in maps.items():
-            cur_years = years[k]
-            sort_inds = np.argsort(cur_years)
-            years[k] = cur_years[sort_inds]
-            maps[k] = v[sort_inds]
+    def sample_name(self, img_name):
+        patch, year, idx = img_name.split('.')[0].split('_', 2)
+        return (patch, idx)
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, item):
-        path = self.samples[item]
-        sample = self.loader(path)
-        sample = self.transform(sample)
-        return sample, 0
+        patch, idx = self.samples[item]
+        files = glob.glob(os.path.join(self.root, 'sample', f'{patch}_*_{idx}.png'))
+        sample = [self.loader(f) for f in sorted(files)]
+
+        if len(sample) > 16:
+            sample = sample[len(sample) - 16:]
+        elif len(sample) < 16:
+            sample = sample + sample[len(sample) - 1:] * (16 - len(sample))
+        assert len(sample) == 16
+
+        gt = self.loader(os.path.join(self.root, 'gt', f'{patch}_{idx}.png'))
+        images = [gt] + sample
+        images = self.transform(images)
+
+        return images[1:], images[0]
 
     def collate_batch(self, data_list):
-        data_dict = {}
-        for k in data_list[0].keys():
-            data = [x[k] for x in data_list]
-            if isinstance(data[0], torch.Tensor):
-                data_dict[k] = torch.stack([x[k] for x in data_list], dim=0)
-            else:
-                data_dict[k] = data
-        return data_dict
+        return torch.stack(data_list, dim=0)
 
 
 if __name__ == '__main__':
-    dataset = HamelnTemporalDataset("/media/yuan/luna/data/HisMAP/Hameln/TK_projektiv_entzerrt_1m", None)
+    dataset = HamelnTemporalDataset("/media/yuan/luna/data/HisMAP/Hameln/train_data", None)
     for sample in dataset:
         pass

@@ -37,7 +37,7 @@ def get_args_parser():
         values leads to better performance but requires more memory. Applies only
         for ViTs (vit_tiny, vit_small and vit_base). If <16, we recommend disabling
         mixed precision training (--use_fp16 false) to avoid unstabilities.""")
-    parser.add_argument('--out_dim', default=1024, type=int, help="""Dimensionality of
+    parser.add_argument('--out_dim', default=5, type=int, help="""Dimensionality of
         the DINO head output. For complex and large datasets large values (like 65k) work well.""")
     parser.add_argument('--norm_last_layer', default=True, type=utils.bool_flag,
         help="""Whether or not to weight normalize the last layer of the DINO head.
@@ -170,7 +170,7 @@ def train_dino(args):
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, vits.DINOHead(
+    student = utils.MultiCropWrapper(student, vits.SegHead(
         embed_dim,
         args.out_dim,
         use_bn=args.use_bn_in_head,
@@ -178,7 +178,7 @@ def train_dino(args):
     ))
     teacher = utils.MultiCropWrapper(
         teacher,
-        vits.DINOHead(embed_dim, args.out_dim, args.use_bn_in_head),
+        vits.SegHead(embed_dim, args.out_dim, args.use_bn_in_head),
     )
 
     # move networks to gpu
@@ -300,7 +300,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                     fp16_scaler, args):
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
-    for it, images in enumerate(metric_logger.log_every(data_loader, 10, header)):
+    for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
         for i, param_group in enumerate(optimizer.param_groups):
@@ -310,11 +310,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
         # move images to gpu
         images = images.cuda(non_blocking=True)
+        labels = labels.cuda(non_blocking=True)
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:, :-1].flatten(0, 1))  # only the 2 global views pass through the teacher
-            student_output = student(images[:, 1:].flatten(0, 1))
-            loss = dino_loss(student_output, teacher_output, epoch)
+            student_output = student(images.detach().flatten(0, 1))
+            loss = dino_loss(student_output, teacher_output, labels, epoch)
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()))

@@ -22,7 +22,7 @@ class DINOLoss(nn.Module):
             np.ones(nepochs - warmup_teacher_temp_epochs) * teacher_temp
         ))
 
-    def forward(self, student_output, teacher_output, epoch):
+    def forward(self, student_output, teacher_output, labels, epoch):
         """
         Cross-entropy between softmax outputs of the teacher and student networks.
         """
@@ -31,9 +31,16 @@ class DINOLoss(nn.Module):
         # teacher centering and sharpening
         temp = self.teacher_temp_schedule[epoch]
         teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
-        teacher_out = teacher_out.detach()
+        teacher_out = teacher_out.detach().split(15)
 
-        total_loss = torch.sum(-teacher_out * F.log_softmax(student_out, dim=-1), dim=-1).mean()
+        teacher_out_label = []
+        for i, x in enumerate(teacher_out):
+            label = F.one_hot(labels[i, 0].long(), num_classes=5).float()
+            tol = torch.cat([x, label.unsqueeze(0)], dim=0)
+            teacher_out_label.append(tol)
+        teacher_out_label = torch.cat(teacher_out_label, dim=0)
+
+        total_loss = torch.sum(-teacher_out_label * F.log_softmax(student_out, dim=-1), dim=-1).mean()
         self.update_center(teacher_output)
         return total_loss
 

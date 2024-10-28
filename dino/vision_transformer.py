@@ -133,7 +133,7 @@ class PatchEmbed(nn.Module):
 
 class VisionTransformer(nn.Module):
     """ Vision Transformer """
-    def __init__(self, img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
+    def __init__(self, img_size=[512], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=nn.LayerNorm, **kwargs):
         super().__init__()
@@ -144,7 +144,7 @@ class VisionTransformer(nn.Module):
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -172,12 +172,12 @@ class VisionTransformer(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def interpolate_pos_encoding(self, x, w, h):
-        npatch = x.shape[1] - 1
-        N = self.pos_embed.shape[1] - 1
+        npatch = x.shape[1]
+        N = self.pos_embed.shape[1]
         if npatch == N and w == h:
             return self.pos_embed
-        class_pos_embed = self.pos_embed[:, 0]
-        patch_pos_embed = self.pos_embed[:, 1:]
+        # class_pos_embed = self.pos_embed[:, 0]
+        patch_pos_embed = self.pos_embed
         dim = x.shape[-1]
         w0 = w // self.patch_embed.patch_size
         h0 = h // self.patch_embed.patch_size
@@ -191,15 +191,15 @@ class VisionTransformer(nn.Module):
         )
         assert int(w0) == patch_pos_embed.shape[-2] and int(h0) == patch_pos_embed.shape[-1]
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-        return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
+        return patch_pos_embed
 
     def prepare_tokens(self, x):
         B, nc, w, h = x.shape
         x = self.patch_embed(x)  # patch linear embedding
 
         # add the [CLS] token to the embed patch tokens
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
+        # cls_tokens = self.cls_token.expand(B, -1, -1)
+        # x = torch.cat((cls_tokens, x), dim=1)
 
         # add positional encoding to each token
         x = x + self.interpolate_pos_encoding(x, w, h)
@@ -211,7 +211,9 @@ class VisionTransformer(nn.Module):
         for blk in self.blocks:
             x = blk(x)
         x = self.norm(x)
-        return x[:, 0]
+        n = int(math.sqrt(x.shape[1]))
+        x = x.view(-1, n, n, self.embed_dim)
+        return x
 
     def get_last_selfattention(self, x):
         x = self.prepare_tokens(x)
@@ -287,6 +289,43 @@ class DINOHead(nn.Module):
 
     def forward(self, x):
         x = self.mlp(x)
+        x = nn.functional.normalize(x, dim=-1, p=2)
+        x = self.last_layer(x)
+        return x
+
+
+class SegHead(nn.Module):
+    def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
+        super().__init__()
+        self.convs = nn.Sequential(
+            nn.ConvTranspose2d(in_dim, bottleneck_dim, kernel_size=2, stride=2),
+            nn.BatchNorm2d(bottleneck_dim),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(bottleneck_dim, bottleneck_dim, kernel_size=2, stride=2),
+            nn.BatchNorm2d(bottleneck_dim),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(bottleneck_dim, bottleneck_dim, kernel_size=2, stride=2),
+            nn.BatchNorm2d(bottleneck_dim),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(bottleneck_dim, bottleneck_dim, kernel_size=2, stride=2),
+            nn.BatchNorm2d(bottleneck_dim),
+            nn.ReLU(inplace=True)
+        )
+        self.apply(self._init_weights)
+        # decouple magnitude of weight from its direction
+        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+        self.last_layer.weight_g.data.fill_(1)
+        if norm_last_layer:
+            self.last_layer.weight_g.requires_grad = False
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        x = self.convs(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         x = nn.functional.normalize(x, dim=-1, p=2)
         x = self.last_layer(x)
         return x

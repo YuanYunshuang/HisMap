@@ -2,6 +2,7 @@ DATASET:
   dataset: hameln
   name: hameln
   data_path: /home/yuan/data/HisMap/Hameln/seg4cls_train
+  gt_dir: /home/yuan/data/HisMap/Hameln/seg4cls_train/gt
   mode: train
   batch_size: 16
   n_workers: 4

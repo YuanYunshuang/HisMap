@@ -58,7 +58,7 @@ if __name__ == "__main__":
     if args.data_path is not None:
         cfgs['DATASET']['data_path'] = args.data_path
 
-    path = "/media/yuan/luna/data/HisMAP/Hameln"
+    path = "/home/yuan/data/HisMap/Hameln"
     exps = [
         '2016_2017',
         '2011_2012',
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         }
     ckpt_key = 'all'
     exp_key = 'drop'
-    log_dir = f'/media/yuan/luna/data/HisMAP/Hameln/exp_{exp_key}/seg4cls_'
+    log_dir = f'{path}/exp_{exp_key}/seg4cls_'
     max_epoch = 10
     for i in range(len(exps) - 1):
         years = exps[i]
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{years}'
         train_years = parse_years(next_years) + parse_years(years)
         cfgs['DATASET']['train_year'] = train_years
-        cfgs['DATASET']['data_path'] = '/media/yuan/luna/data/HisMAP/Hameln/train_data'
+        cfgs['DATASET']['data_path'] = f'{path}/train_data'
         ss = "=======TRAIN=======\n"
         ss += f"LOG_DIR: {exp_dir}\n"
         ss += f"TRAIN_YEARS: {train_years}\n"

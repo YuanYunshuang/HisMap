@@ -28,7 +28,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--arch', default='vit_small', type=str,
-        choices=['vit_tiny', 'vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
+        choices=['unet', 'vit_tiny', 'vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
                 + torchvision_archs + torch.hub.list("facebookresearch/xcit:main"),
         help="""Name of architecture to train. For quick experiments with ViTs,
         we recommend using vit_tiny or vit_small.""")
@@ -124,11 +124,7 @@ def test_dino(args):
     cudnn.benchmark = True
 
     # ============ preparing data ... ============
-    transform = augmentation.DataAugmentationHameln(
-        args.global_crops_scale,
-        args.local_crops_scale,
-        args.local_crops_number,
-    )
+    transform = augmentation.DataAugmentationHameln(train=False)
 
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
     dataset = HamelnTemporalDataset(args.data_path, transform=transform)
@@ -166,20 +162,25 @@ def test_dino(args):
         student = torchvision_models.__dict__[args.arch]()
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
+    elif args.arch == "unet":
+        from src.dlmodule.unet import UNet
+        student = UNet(num_classes=5)
+        teacher = UNet(num_classes=5)
     else:
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, vits.SegHead(
-        embed_dim,
-        args.out_dim,
-        use_bn=args.use_bn_in_head,
-        norm_last_layer=args.norm_last_layer,
-    ))
-    teacher = utils.MultiCropWrapper(
-        teacher,
-        vits.SegHead(embed_dim, args.out_dim, args.use_bn_in_head),
-    )
+    if 'vit' in args.arch:
+        student = utils.MultiCropWrapper(student, vits.SegHead(
+            embed_dim,
+            args.out_dim,
+            use_bn=args.use_bn_in_head,
+            norm_last_layer=args.norm_last_layer,
+        ))
+        teacher = utils.MultiCropWrapper(
+            teacher,
+            vits.SegHead(embed_dim, args.out_dim, args.use_bn_in_head),
+        )
 
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
@@ -241,8 +242,10 @@ def test_one_epoch(student, teacher, teacher_without_ddp, data_loader, args):
         images = images.cuda(non_blocking=True)
         labels = labels.cuda(non_blocking=True)
         # teacher and student forward passes + compute dino loss
-        teacher_output = teacher(images[:, :-1].flatten(0, 1))  # only the 2 global views pass through the teacher
+        teacher_output = teacher(images.flatten(0, 1))  # only the 2 global views pass through the teacher
         student_output = student(images.detach().flatten(0, 1))
+
+        vis_data(images, labels, teacher_output, student_output)
 
         # logging
         torch.cuda.synchronize()
@@ -251,6 +254,32 @@ def test_one_epoch(student, teacher, teacher_without_ddp, data_loader, args):
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
+
+@torch.no_grad()
+def vis_data(images, labels, teacher_output, student_output):
+    import matplotlib.pyplot as plt
+    bs, n, _, w, h = images.shape
+    images = (images * torch.tensor([0.229, 0.224, 0.225], device=images.device).reshape(1, 1, 3, 1, 1)
+              + torch.tensor([0.485, 0.456, 0.406], device=images.device).reshape(1, 1, 3, 1, 1))
+    images = images.cpu().numpy()
+    labels = labels.cpu().numpy()
+    teacher_output = teacher_output.reshape(bs, n, w, h, 5).softmax(dim=-1).cpu().numpy()
+    student_output = student_output.reshape(bs, n, w, h, 5).softmax(dim=-1).cpu().numpy()
+
+    fig = plt.figure(figsize=(34, 12))
+    axs = fig.subplots(6, 17)
+
+    for i, img in enumerate(images[0, :]):
+        axs[0, i].imshow(img[::-1].transpose(1, 2, 0))
+    axs[0, 16].imshow(labels[0, 0] * 50)
+    for i, img in enumerate(teacher_output[0, :]):
+        for j in range(img.shape[-1]):
+            axs[j+1, i].imshow(img[..., j]) #, vmin=0, vmax=1)
+            label = (labels[0, 0] == j).astype(float)
+            axs[j+1, 16].imshow(label)
+
+    plt.tight_layout()
+    plt.savefig("/home/yuan/Downloads/tmp.jpg")
 
 
 if __name__ == '__main__':

@@ -28,7 +28,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--arch', default='vit_small', type=str,
-        choices=['vit_tiny', 'vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
+        choices=['unet', 'vit_tiny', 'vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
                 + torchvision_archs + torch.hub.list("facebookresearch/xcit:main"),
         help="""Name of architecture to train. For quick experiments with ViTs,
         we recommend using vit_tiny or vit_small.""")
@@ -64,9 +64,9 @@ def get_args_parser():
         to use half precision for training. Improves training time and memory requirements,
         but can provoke instability and slight decay of performance. We recommend disabling
         mixed precision if the loss is unstable, if reducing the patch size or if training with bigger ViTs.""")
-    parser.add_argument('--weight_decay', type=float, default=0.04, help="""Initial value of the
+    parser.add_argument('--weight_decay', type=float, default=0.01, help="""Initial value of the
         weight decay. With ViT, a smaller value at the beginning of training works well.""")
-    parser.add_argument('--weight_decay_end', type=float, default=0.4, help="""Final value of the
+    parser.add_argument('--weight_decay_end', type=float, default=0.04, help="""Final value of the
         weight decay. We use a cosine schedule for WD and using a larger decay by
         the end of training improves performance for ViTs.""")
     parser.add_argument('--clip_grad', type=float, default=3.0, help="""Maximal parameter
@@ -78,7 +78,7 @@ def get_args_parser():
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
         during which we keep the output layer fixed. Typically doing so during
         the first epoch helps training. Try increasing this value if the loss does not decrease.""")
-    parser.add_argument("--lr", default=0.0005, type=float, help="""Learning rate at the end of
+    parser.add_argument("--lr", default=0.05, type=float, help="""Learning rate at the end of
         linear warmup (highest LR used during training). The learning rate is linearly scaled
         with the batch size, and specified here for a reference batch size of 256.""")
     parser.add_argument("--warmup_epochs", default=10, type=int,
@@ -124,11 +124,7 @@ def train_dino(args):
     cudnn.benchmark = True
 
     # ============ preparing data ... ============
-    transform = augmentation.DataAugmentationHameln(
-        args.global_crops_scale,
-        args.local_crops_scale,
-        args.local_crops_number,
-    )
+    transform = augmentation.DataAugmentationHameln(train=True)
 
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
     dataset = HamelnTemporalDataset(args.data_path, transform=transform)
@@ -166,20 +162,25 @@ def train_dino(args):
         student = torchvision_models.__dict__[args.arch]()
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
+    elif args.arch == "unet":
+        from src.dlmodule.unet import UNet
+        student = UNet(num_classes=5)
+        teacher = UNet(num_classes=5)
     else:
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, vits.SegHead(
-        embed_dim,
-        args.out_dim,
-        use_bn=args.use_bn_in_head,
-        norm_last_layer=args.norm_last_layer,
-    ))
-    teacher = utils.MultiCropWrapper(
-        teacher,
-        vits.SegHead(embed_dim, args.out_dim, args.use_bn_in_head),
-    )
+    if 'vit' in args.arch:
+        student = utils.MultiCropWrapper(student, vits.SegHead(
+            embed_dim,
+            args.out_dim,
+            use_bn=args.use_bn_in_head,
+            norm_last_layer=args.norm_last_layer,
+        ))
+        teacher = utils.MultiCropWrapper(
+            teacher,
+            vits.SegHead(embed_dim, args.out_dim, args.use_bn_in_head),
+        )
 
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
@@ -208,7 +209,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ preparing loss ... ============
-    dino_loss = loss.DINOLoss(
+    dino_loss = loss.DINOFocalLoss(
         args.out_dim,
         args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
         args.warmup_teacher_temp,
@@ -342,24 +343,61 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             fp16_scaler.update()
 
         # EMA update for the teacher
-        with torch.no_grad():
-            m = momentum_schedule[it]  # momentum parameter
-            if args.distributed:
-                for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
-                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
-            else:
-                for param_q, param_k in zip(student.parameters(), teacher_without_ddp.parameters()):
-                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+        # with torch.no_grad():
+        #     m = momentum_schedule[it]  # momentum parameter
+        #     if args.distributed:
+        #         for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
+        #             param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+        #     else:
+        #         for param_q, param_k in zip(student.parameters(), teacher_without_ddp.parameters()):
+        #             param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
         # logging
         torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
+        # metric_logger.update(cr=care_ratio)
+
+        if it % 100 == 0:
+            vis_data(images, labels, teacher_output, student_output)
+
+    # update for the teacher
+    for param_q, param_k in zip(student.parameters(), teacher_without_ddp.parameters()):
+        param_k.data = param_q.detach().data.clone()
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+@torch.no_grad()
+def vis_data(images, labels, teacher_output, student_output):
+    import matplotlib.pyplot as plt
+    bs, n, _, w, h = images.shape
+    images = (images * torch.tensor([0.229, 0.224, 0.225], device=images.device).reshape(1, 1, 3, 1, 1)
+              + torch.tensor([0.485, 0.456, 0.406], device=images.device).reshape(1, 1, 3, 1, 1))
+    images = images.cpu().numpy()
+    labels = labels.cpu().numpy()
+    # teacher_output = teacher_output.reshape(bs, n, w, h, 5).softmax(dim=-1).cpu().numpy()
+    student_output = student_output.permute(0, 2, 3, 1)
+    student_output = student_output.reshape(bs, n, w, h, 5).sigmoid().cpu().numpy()
+
+    fig = plt.figure(figsize=(17, 12))
+    axs = fig.subplots(6, 9)
+
+    for i, img in enumerate(images[0, 1::2]):
+        axs[0, i].imshow(img[::-1].transpose(1, 2, 0))
+    axs[0, -1].imshow(labels[0, 0] * 50, vmin=0, vmax=255)
+    for i, img in enumerate(student_output[0, 1::2]):
+        for j in range(img.shape[-1]):
+            axs[j+1, i].imshow(img[..., j], vmin=0, vmax=1)
+            label = (labels[0, 0] == j).astype(float)
+            axs[j+1, -1].imshow(label, vmin=0, vmax=1)
+
+    plt.tight_layout()
+    plt.savefig("/home/yuan/Downloads/tmp.jpg")
+    plt.close()
 
 
 

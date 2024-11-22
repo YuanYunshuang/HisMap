@@ -57,21 +57,40 @@ class DataAugmentationDINO(object):
 
 
 class DataAugmentationHameln(object):
-    def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
-        self.transform = transforms.Compose([
-            transforms.RandomCrop(256),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
-        ])
-        self.color_jitter_normlize = transforms.Compose([
-            transforms.RandomApply(
-                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
-                p=0.8
-            ),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
+    def __init__(self, train=True):
+        self.train = train
+        if self.train:
+            self.transform = transforms.Compose([
+                transforms.RandomCrop(256),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+            ])
+
+            self.color_jitter_normlize = transforms.Compose([
+                # transforms.RandomApply(
+                #     [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                #     p=0.8
+                # ),
+                # transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ])
+        else:
+            self.transform = transforms.Compose([
+                transforms.RandomCrop(256),
+                # transforms.RandomHorizontalFlip(p=0.5),
+                # transforms.RandomVerticalFlip(p=0.5),
+            ])
+
+            self.color_jitter_normlize = transforms.Compose([
+                # transforms.RandomApply(
+                #     [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                #     p=0.8
+                # ),
+                # transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ])
 
         self.to_tensor = transforms.ToTensor()
 
@@ -84,9 +103,16 @@ class DataAugmentationHameln(object):
         # ])
 
     def __call__(self, images):
-        crops = [self.to_tensor(images[0]) * 255]
-        for img in images[1:]:
-            crops.append(self.color_jitter_normlize(img))
-        crops = torch.stack(crops, dim=0)
-        crops = self.transform(crops)
+        if self.train:
+            crops = [self.to_tensor(images[0]) * 255]
+            for img in images[1:]:
+                crops.append(self.color_jitter_normlize(img))
+            crops = torch.stack(crops, dim=0)
+            crops = self.transform(crops)
+        else:
+            crops = [self.to_tensor(images[0]) * 255]
+            for img in images[1:]:
+                crops.append(self.color_jitter_normlize(img))
+            crops = torch.stack(crops, dim=0)
+            # crops = self.transform(crops)
         return crops

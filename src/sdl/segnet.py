@@ -3,6 +3,7 @@ from torch import nn
 
 from src.dlmodule.unet import UNet
 from src.losses import build_loss, pred_to_conf_unc
+from src.utils.common import unpackbits
 
 
 class SegNet(nn.Module):
@@ -28,6 +29,10 @@ class SegNet(nn.Module):
         if gt.ndim == 3:
             gt = gt.flatten()
             cared = self.sample_target(gt)
+        elif gt.ndim == 4:
+            gt = gt.flatten()
+            cared = self.sample_target(gt)
+            gt = unpackbits(gt.squeeze(), num_bits=5, bitorder='little')
         else:
             gt = gt.permute(0, 2, 3, 1).flatten(0, 2)
             pos = gt.max(dim=-1).values > 0.6

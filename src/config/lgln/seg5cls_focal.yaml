@@ -6,10 +6,10 @@ DATASET:
   batch_size: 16
   n_workers: 4
   gpus: 0
-  crop_size: 512
-  crop_step_size: 128
-  start_year: 1973
-  end_year: 1975
+  crop_size: 384
+  crop_step_size: 256
+  start_year: 1898
+  end_year: 2000
 
   train_pipeline:
     - LGLNFlipRotImage: {}
@@ -21,7 +21,7 @@ TRAIN:
   log_every: 10
   max_epoch: 20
   gpus: 0
-  hooks: 'pycfg.base.hooks.train_hooks'
+  hooks: 'pycfg.base.hooks.lgln_train_hooks'
   optimizer:
     lr: 0.0002
     weight_decay: 1e-2
@@ -32,15 +32,16 @@ TRAIN:
     gamma: 0.1
 
 TEST:
-  hooks: 'pycfg.base.hooks.test_hooks'
+  hooks:
+    - type: LGLNEvalHook
 
 
 MODEL:
   type: 'segnet.SegNet'
-  num_classes: 5
+  num_classes: 6
   loss_cfg:
     type: FocalLoss
-    use_sigmoid: False
+    use_sigmoid: false
 
 
 

@@ -9,6 +9,7 @@ import torch
 import tqdm
 from torchvision.utils import make_grid
 from src.utils.logger import plt_to_image
+from src.utils.common import unpackbits
 
 
 class Hooks:
@@ -184,6 +185,94 @@ class SegPlotWriterHook(BaseHook):
             runner.writer.add_image(f"train/img", image, steps, dataformats='HWC')
 
 
+class LGLNSegPlotWriterHookV2(BaseHook):
+    def __init__(self, max_n_img=32, log_every=100, **kwargs):
+        super().__init__(**kwargs)
+        self.max_n_img = max_n_img
+        self.log_every = log_every
+        self.classes = ['FlowingWater', 'Grassland', 'Settlement', 'StandingWater', 'Woodland']
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        steps = (runner.epoch - 1) * runner.total_iter + runner.iter
+        if steps % self.log_every == 0:
+            import matplotlib.pyplot as plt
+            # this might use main thread if imported on the top
+            years = np.array(out_dict['data_years'][0])
+            n = max(len(years), 4)
+            input_img = out_dict['input_img'][:n]
+            conf_img = out_dict['conf_img'][:n]
+            rows = min(4, input_img.shape[0])
+            if len(input_img) > 4:
+                inds = torch.arange(0, len(input_img), len(input_img) // rows + 1).tolist()
+                if len(inds) < 4:
+                    inds.append(len(input_img) - 1)
+            else:
+                inds = torch.arange(0, len(input_img), 1).tolist()
+            input_img = input_img[inds]
+            conf_img = conf_img[inds]
+            years = years[inds]
+            gt_img = unpackbits(out_dict['gt_img'][0].squeeze(), num_bits=5, bitorder='little').float()
+            cols = conf_img.shape[-1] + 1
+            fig = plt.figure(figsize=(3*cols, 3*(rows + 1)))
+            axs = fig.subplots(rows + 1, cols)
+            for r in range(rows):
+                axs[r, 0].imshow(input_img[r].permute(1, 2, 0).detach().cpu().numpy()[::2, ::2, ::-1])
+                axs[r, 0].set_title(years[r])
+                confs = conf_img[r].permute(2, 0, 1).detach().cpu().numpy()
+                for i, img in enumerate(confs):
+                    axs[r, 1 + i].imshow(img[::2, ::2], cmap='jet', vmin=0, vmax=1)
+                    axs[r, 1 + i].set_title(f'{self.classes[i]}')
+            axs[-1, 0].imshow(
+                np.zeros_like((out_dict['gt_img'][0].squeeze()[::2, ::2].float() / 20).detach().cpu().numpy()),
+                cmap='jet', vmin=0, vmax=1)
+            for l in range(conf_img.shape[-1]):
+                axs[-1, l+1].imshow(gt_img[::2, ::2, l].detach().cpu().numpy(),
+                                 cmap='jet', vmin=0, vmax=1)
+                axs[-1, l+1].set_title(f'GT:{self.classes[l]}')
+            plt.tight_layout()
+            image = plt_to_image(plt)
+            plt.close()
+            runner.writer.add_image(f"train/img", image, steps, dataformats='HWC')
+
+
+class LGLNSegPlotWriterHook(BaseHook):
+    def __init__(self, max_n_img=32, log_every=100, **kwargs):
+        super().__init__(**kwargs)
+        self.max_n_img = max_n_img
+        self.log_every = log_every
+        self.classes = ['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        steps = (runner.epoch - 1) * runner.total_iter + runner.iter
+        if steps % self.log_every == 0:
+            import matplotlib.pyplot as plt
+            # this might use main thread if imported on the top
+            years = [x[0] for x in out_dict['data_years']]
+            input_img = out_dict['input_img'][:4].detach().cpu().numpy()
+            conf_img = out_dict['conf_img'][:4].detach().cpu().numpy()
+            gt_img = out_dict['gt_img'][:4].squeeze().detach().cpu().numpy()
+            rows = 4
+            cols = conf_img.shape[-1] + 1
+            fig = plt.figure(figsize=(3*cols, 3*(rows + 1)))
+            axs = fig.subplots(rows, cols)
+            for r in range(rows):
+                axs[r, 0].imshow(input_img[r].transpose(1, 2, 0)[::2, ::2, ::-1])
+                axs[r, 0].set_title(years[r])
+                confs = conf_img[r].transpose(2, 0, 1)
+                labels = gt_img[r]
+                for i, img in enumerate(confs[1:]):
+                    axs[r, 1 + i].imshow(img[::2, ::2], cmap='jet', vmin=0, vmax=1)
+                    axs[r, 1 + i].set_title(f'{self.classes[i]}')
+                    axs[r, -1].set_axis_off()
+                axs[r, -1].imshow((labels[::2, ::2] / 5), cmap='jet', vmin=0, vmax=1)
+            plt.tight_layout()
+            image = plt_to_image(plt)
+            plt.close()
+            runner.writer.add_image(f"train/img", image, steps, dataformats='HWC')
+
+
 class SaveSegResultHook(BaseHook):
     def __init__(self, save_every=4, **kwargs):
         super().__init__(**kwargs)
@@ -264,6 +353,66 @@ class HolisticSegResultHook(BaseHook):
                 print('d')
 
         cv2.imwrite(os.path.join(self.log_dir, f'{name}_{key}.png'), fullmap)
+
+
+class LGLNEvalHook(BaseHook):
+    def __init__(self, input_size=1024, overlap=0, **kwargs):
+        super().__init__(**kwargs)
+        self.input_size = input_size
+        self.overlap = overlap
+        self.margin = overlap // 2
+        self.maps = set()
+        self.max_xy = [0, 0]
+        self.conf_channels = ['FlowingWater', 'Grassland', 'Settlement', 'StandingWater', 'Woodland']
+
+    def set_logger(self, logger):
+        self.log_dir = os.path.join(logger.logdir, 'holistic_seg_result')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        maps = []
+        for p, years in zip(out_dict['patch'], out_dict['data_years']):
+            maps.extend([f'{p}_{y}' for y in years])
+        self.maps = self.maps | set(maps)
+        for i, patch in enumerate(out_dict['patch']):
+            x, y = out_dict['x'][i], out_dict['y'][i]
+            self.max_xy = [max(int(x), self.max_xy[0]), max(int(y), self.max_xy[1])]
+            for j, year in enumerate(out_dict['data_years'][i]):
+                conf = out_dict['conf_img'][j, :, :].detach().cpu().numpy()
+                unc = out_dict['unc_img'][i].detach().cpu().numpy()
+                for c, k in enumerate(self.conf_channels):
+                    cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{k}.png'),
+                                conf[..., c] * 255)
+                cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_unc.png'), unc * 255)
+
+    def post_epoch(self, runner, **kwargs):
+        names = os.listdir(self.log_dir)
+        for m in self.maps:
+            for k in self.conf_channels + ['unc']:
+                self.stitch(k, [n for n in names if (f'{k}.png' in n) and (m in n)])
+
+    def stitch(self, key, names):
+        patch, year, x, y = names[0].split('.')[0].split('_')[:4]
+        name = f'{patch}_{year}'
+        fullmap = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size))
+        print(f"Stitching images for '{name}_{key}'...")
+        for n in tqdm.tqdm(names):
+            x, y = n.split('.')[0].split('_')[2:4]
+            x = int(x)
+            y = int(y)
+            sx = self.input_size
+            sy = self.input_size
+            f = os.path.join(self.log_dir, n)
+            res = cv2.imread(f, cv2.IMREAD_UNCHANGED)
+            os.remove(f)
+            fullmap[x:x + sx, y:y + sy] = res
+
+        cv2.imwrite(os.path.join(self.log_dir, f'{name}_{key}.png'), fullmap)
+
+    def iou(self, pred, gt):
+        pred_cls = pred.argmax(axis=-1)
+        return 0
 
 
 

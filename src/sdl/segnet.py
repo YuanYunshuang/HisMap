@@ -12,6 +12,7 @@ class SegNet(nn.Module):
         self.unet = UNet(**kwargs)
         self.loss_neg_pos_ratio = loss_cfg.pop('neg_pos_ratio', None)
         self.loss_fn = build_loss(**loss_cfg)
+        self.binary_labels = kwargs.get('binary_labels', False)
 
     def forward(self, data, **kwargs):
         x = data['input_img']
@@ -24,15 +25,19 @@ class SegNet(nn.Module):
         return data
 
     def loss(self, data, epoch, **kwargs):
-        pred = data['pred_img'].flatten(2, 3).permute(0, 2, 1).flatten(0, 1)
-        gt = data['gt_img']
+        pred = data['pred_img'].permute(0, 2, 3, 1).flatten(0, 2)
+        gt = []
+        for i, years in enumerate(data['data_years']):
+            gt.extend([data['gt_img'][i]] * len(years))
+        gt = torch.stack(gt, dim=0).permute(0, 2, 3, 1)
         if gt.ndim == 3:
             gt = gt.flatten()
             cared = self.sample_target(gt)
         elif gt.ndim == 4:
             gt = gt.flatten()
             cared = self.sample_target(gt)
-            gt = unpackbits(gt.squeeze(), num_bits=5, bitorder='little')
+            if self.binary_labels:
+                gt = unpackbits(gt.squeeze(), num_bits=5, bitorder='little')
         else:
             gt = gt.permute(0, 2, 3, 1).flatten(0, 2)
             pos = gt.max(dim=-1).values > 0.6

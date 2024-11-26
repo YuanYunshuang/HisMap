@@ -68,6 +68,9 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", type=str)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--n-workers", type=int)
+    parser.add_argument("--year-range", type=str)
+    parser.add_argument("--years", type=str)
+    parser.add_argument("--crop-size", type=int)
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -89,6 +92,16 @@ if __name__ == "__main__":
         cfgs['DATASET']['n_workers'] = args.n_workers
     if args.data_path is not None:
         cfgs['DATASET']['data_path'] = args.data_path
+    if args.year_range is not None:
+        start_year, end_year = args.year_range.split("-")
+        cfgs['DATASET']['start_year'] = int(start_year)
+        cfgs['DATASET']['end_year'] = int(end_year)
+    if args.years is not None:
+        cfgs['DATASET']['years'] = args.years
+    if args.crop_size is not None:
+        cfgs['DATASET']['crop_size'] = args.crop_size
+        if args.mode == "test":
+            cfgs['DATASET']['crop_step_size'] = args.crop_size
 
     sdl_runner = SupervisedRunner(args, cfgs)
     if args.mode == "train":

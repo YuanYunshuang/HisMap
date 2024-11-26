@@ -14,7 +14,8 @@ colors = {
     "forest": [[0, 127, 95], [43, 147, 72], [85, 166, 48], [128, 185, 24], [170, 204, 0]]
 }
 
-german2english = {'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater', 'Grünland': 'Grassland', 'Siedlung': 'Settlement', 'Wald': 'Woodland'}
+german2english = {'Wald': 'Woodland', 'Grünland': 'Woodland', 'Siedlung': 'Settlement', 'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater'}
+LGLN_CLS=['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
 
 def label_to_rgb(in_file, out_file, color, down_sample=2):
     flow_water = read_tiff(in_file)
@@ -55,11 +56,6 @@ def tmp():
     forest = read_tiff("/home/yuan/data/HisMap/LGLN/TK25_Reference/3922/tif/3922_1898_Wald.tif")
 
 
-if __name__ == '__main__':
-    # labels_to_rgb(
-    #     "/home/yuan/data/HisMap/LGLN/TK25_Reference/3922/tif",
-    #     "3922_1898",
-    # )
     in_path = "/home/yuan/data/HisMap/LGLN/TK25_Reference/3922/tif"
     out_path = "/home/yuan/data/HisMap/LGLN/dataset/test/gt"
     for german, english in german2english.items():
@@ -68,4 +64,32 @@ if __name__ == '__main__':
             filename = os.path.basename(f)
             filename = filename.replace(german, english)
             shutil.copy(f, f"{out_path}/{filename}")
+
+
+def remap_label(in_path):
+    out_path = in_path.replace('gt', 'label')
+    files = sorted(glob(in_path + "/*.tif"))
+    data = {p: {} for p in ['3821', '3822', '3921', '3922']}
+    for f in files:
+        patch, year, cls = os.path.basename(f).split(".")[0].split("_")
+        label = LGLN_CLS.index(cls)
+        TIF = read_tiff(f)
+        if year not in data[patch]:
+            data[patch][year] = np.zeros((5,) + TIF.shape, dtype=bool)
+        data[patch][year][label] = TIF == 1
+
+    for patch, labels in data.items():
+        for year, label in labels.items():
+            remapped_label = np.zeros_like(label[0]).astype(np.uint8)
+            for i, l in enumerate(label):
+                remapped_label[l] = (i + 1) * 50
+            cv2.imwrite(os.path.join(out_path, f"{patch}_{year}.png"), remapped_label)
+
+
+
+if __name__ == '__main__':
+    path = "/home/yuan/data/HisMap/LGLN/dataset/train/gt"
+    remap_label(path)
+
+
 

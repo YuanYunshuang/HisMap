@@ -57,3 +57,20 @@ def seed_all(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
     random.seed(seed)
+
+
+def unpackbits(x, num_bits=8, bitorder='big'):
+    """
+    Unpacks integers into a binary representation.
+
+    Args:
+        x: A torch tensor of integers.
+        num_bits: Number of bits to unpack.
+        bitorder: 'big' or 'little', determining bit order.
+
+    Returns:
+        A tensor of shape x.shape + (num_bits,) with binary representation.
+    """
+    x = x.unsqueeze(-1)
+    mask = 2 ** torch.arange(num_bits - 1, -1, -1, device=x.device) if bitorder == 'big' else 2 ** torch.arange(0, num_bits, device=x.device)
+    return (x & mask).ne(0).to(torch.bool)

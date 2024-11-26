@@ -321,7 +321,7 @@ class FocalLoss(BaseLoss):
                 calculate_loss_func = py_sigmoid_focal_loss
         else:
             if self.activated:
-                raise NotImplementedError
+                calculate_loss_func = py_focal_loss_with_prob
             else:
                 calculate_loss_func = py_softmax_focal_loss
 

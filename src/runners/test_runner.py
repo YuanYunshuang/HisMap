@@ -44,7 +44,7 @@ class TestRunner(BaseRunner):
             else:
                 raise IOError('No checkpoint found.')
         logging.info(f"Resuming the model from checkpoint: {ckpt}")
-        ckpt_dict = torch.load(ckpt, weights_only=True)
+        ckpt_dict = torch.load(ckpt, weights_only=False)
         load_model_dict(self.model, ckpt_dict['model'])
         return ckpt
 

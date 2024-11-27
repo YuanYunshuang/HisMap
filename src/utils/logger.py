@@ -87,12 +87,8 @@ class LogMeter(object):
         self.log_fh = (logdir / file_name).open('a')
         self.delimiter = delimiter
         self.log_every = log_every
-        self.log_msg = self.delimiter.join([
-            'E:{epoch:2d}',
-            'I:[{itr:4d}/' + str(total_iter) + ']',
-            'lr:{lr:.6f}',
-            '{meters}'
-        ])
+        self.update_log_msg(total_iter)
+
         if wandb_project is not None:
             import wandb
             wandb.init(project=wandb_project)
@@ -100,6 +96,14 @@ class LogMeter(object):
             wandb.config.step = 0
             wandb_project = wandb
         self.wandb = wandb_project
+
+    def update_log_msg(self, total_iter):
+        self.log_msg = self.delimiter.join([
+            'E:{epoch:2d}',
+            'I:[{itr:4d}/' + str(total_iter) + ']',
+            'lr:{lr:.6f}',
+            '{meters}'
+        ])
 
     def update(self, **kwargs):
         for k, v in kwargs.items():

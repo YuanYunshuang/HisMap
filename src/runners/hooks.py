@@ -436,11 +436,11 @@ class LGLNPseudoLabelHook(BaseHook):
                         conf_img = data['conf_img'].squeeze()
                         max_conf, plabel = conf_img.max(-1)
                         ignore = (max_conf < self.pos) & (max_conf > self.neg)
-                        plabel[ignore] = -1
+                        plabel[ignore] = 255
                         idx = pseudo_labels[patch]['years'].index(year)
                         sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape
                         pseudo_labels[patch]['data'][idx][x:x+dataset.crop_size, y:y+dataset.crop_size] = \
-                            plabel.cpu().numpy()[:sz[0], :sz[1]]
+                            plabel.cpu().numpy()[:sz[0], :sz[1]].astype(np.uint8)
 
                 # cv2.imwrite("/home/yuan/Downloads/tmp.jpg", pseudo_labels[patch]['data'][0].astype(np.uint8) * 50)
                 dataset.years = []
@@ -456,6 +456,7 @@ class LGLNPseudoLabelHook(BaseHook):
                 runner.model.train()
                 runner.data_iter = iter(runner.dataloader)
                 runner.total_iter = len(runner.dataloader)
+                runner.logger.update_log_msg(runner.total_iter)
             else:
                 self.flag_terminate = True
 

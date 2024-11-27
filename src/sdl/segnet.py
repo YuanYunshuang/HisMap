@@ -51,7 +51,7 @@ class SegNet(nn.Module):
         return total_loss, loss_dict
 
     def sample_target(self, gt):
-        cared = torch.ones_like(gt).bool()
+        cared = gt >= 0
         if self.loss_neg_pos_ratio != None:
             pos = gt > 0
             neg = gt == 0

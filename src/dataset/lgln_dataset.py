@@ -1,3 +1,4 @@
+import copy
 import os
 from fileinput import filename
 
@@ -18,7 +19,6 @@ class LglnDataset(Dataset):
     def __init__(self,
                  cfgs,
                  mode='train',
-                 remapped_label=True,
                  load_to_memory=False
     ):
         self.root_dir = cfgs['data_path']
@@ -31,18 +31,35 @@ class LglnDataset(Dataset):
         self.crop_size = cfgs['crop_size']
         self.max_num_img = cfgs.get('max_num_img', 4)
         self.load_to_memory = load_to_memory
-        if 'years' in cfgs:
-            self.years = [int(year) for year in cfgs['years'].split(',')]
-        else:
-            start_year = cfgs['start_year']
-            end_year = cfgs['end_year']
-            self.years = [y for y in range(start_year, end_year+1)]
+
+        self.parse_meta(cfgs)
         if load_to_memory:
             self.load_maps()
         else:
             self.parse_maps()
         self.load_labels()
-        self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
+        self.train_pipeline = Pipeline(cfgs['train_pipeline'])
+        self.test_pipeline = Pipeline(cfgs['test_pipeline'])
+
+    def parse_meta(self, cfgs):
+        self.meta = {}
+        years = []
+        for x in sorted(os.listdir(self.map_dir)):
+            patch, year = x.split('.')[0].split('_')
+            patch, year = int(patch), int(year)
+            if patch not in self.meta:
+                self.meta[patch] = []
+            years.append(year)
+            self.meta[patch].append(year)
+        for k, v in self.meta.items():
+            self.meta[k] = sorted(v)
+        if 'years' in cfgs:
+            self.years = [int(year) for year in cfgs['years'].split(',')]
+        else:
+            start_year = cfgs['start_year']
+            end_year = cfgs['end_year']
+            years = list(set(years))
+            self.years = [y for y in years if (y >= start_year) and (y <= end_year)]
 
     def load_maps(self):
         # parse maps in valid age
@@ -60,17 +77,18 @@ class LglnDataset(Dataset):
                 maps[patch]['size'].append(TIF.shape)
                 maps[patch]['data'].append(TIF)
                 map_size = TIF.shape
-                x = np.arange(0, map_size[0] - self.crop_size + 1, self.crop_step_size)
-                y = np.arange(0, map_size[1] - self.crop_size + 1, self.crop_step_size)
+                x = np.arange(0, map_size[0], self.crop_step_size)
+                y = np.arange(0, map_size[1], self.crop_step_size)
                 xy = np.stack(np.meshgrid(x, y), axis=-1).reshape(-1, 2)
                 self.samples.extend(np.concatenate([np.zeros_like(xy[:, :1]) + patch,
                                                    np.zeros_like(xy[:, :1]) + year, xy], axis=-1))
+        self.maps = maps
         print(f"Cropped the maps into {len(self.samples)} samples.")
 
     def parse_maps(self):
         # parse maps in valid age
         maps = {}
-        print("Parsing maps to cropped images...")
+        print("Parsing maps images...")
         self.samples = []
         if not os.path.exists(self.img_dir):
             os.makedirs(self.img_dir)
@@ -144,23 +162,92 @@ class LglnDataset(Dataset):
                 labels[patch]['size'].append(cur_label.shape)
         self.labels = labels
 
+    def cfgs_to_pseudo_label_mode(self):
+        self.original_configs = {
+            'mode': getattr(self, 'mode'),
+            'load_to_memory': getattr(self, 'load_to_memory'),
+            'crop_size': getattr(self, 'crop_size'),
+            'crop_step_size': getattr(self, 'crop_step_size'),
+            'maps': copy.deepcopy(getattr(self, 'maps', None)),
+        }
+        self.mode = 'test'
+        self.load_to_memory = True
+        self.crop_size = 1024
+        self.crop_step_size = 1024
+
+    def cfgs_to_train_mode(self):
+        for k, v in self.original_configs.items():
+            setattr(self, k, v)
+
+
+    def pre_update_pseudo_labels(self, step=1):
+        self.cfgs_to_pseudo_label_mode()
+        pseudo_labels = {}
+        has_new_labels = False
+        self.maps = {}
+        self.samples = []
+        print("Loading maps for generating pseudo labels ...")
+        for k, v in self.labels.items():
+            start_year = min(v['years'])
+            end_year = max(v['years'])
+            start_idx = self.meta[k].index(start_year) - 1
+            end_idx = self.meta[k].index(end_year) + 1
+            pseudo_labels[k] = {'years': [], 'data': []}
+
+            if start_idx >= 0:
+                pseudo_labels[k]['years'].append(self.meta[k][start_idx])
+                pseudo_labels[k]['data'].append(np.zeros_like(v['data'][0]))
+                has_new_labels = True
+            if end_idx < len(self.meta[k]):
+                pseudo_labels[k]['years'].append(self.meta[k][end_idx])
+                pseudo_labels[k]['data'].append(np.zeros_like(v['data'][0]))
+                has_new_labels = True
+
+            # load maps for pseudo labels
+            self.maps[k] = {'years': [], 'size': [], 'data': []}
+            for year in pseudo_labels[k]['years']:
+                TIF = read_tiff(os.path.join(self.map_dir, f"{k}_{year}.tif"))
+                self.maps[k]['years'].append(year)
+                self.maps[k]['size'].append(TIF.shape)
+                self.maps[k]['data'].append(TIF)
+                map_size = TIF.shape
+                x = np.arange(0, map_size[0], self.crop_step_size)
+                y = np.arange(0, map_size[1], self.crop_step_size)
+                xy = np.stack(np.meshgrid(x, y), axis=-1).reshape(-1, 2)
+                self.samples.extend(np.concatenate([np.zeros_like(xy[:, :1]) + k,
+                                                    np.zeros_like(xy[:, :1]) + year, xy], axis=-1))
+        return pseudo_labels, has_new_labels
+
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, item):
         patch, year, x, y = self.samples[item]
-        filename = f"{patch}_{year}_{x}_{y}.jpg"
-        img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_COLOR)
+        if self.load_to_memory:
+            img = self.maps[patch]['data'][self.maps[patch]['years'].index(year)][
+                  x:x+self.crop_size, y:y+self.crop_size]
+            if img.ndim == 2:
+                img = img[:, :, np.newaxis].repeat(3, axis=2)
+        else:
+            filename = f"{patch}_{year}_{x}_{y}.jpg"
+            img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_COLOR)
+        img = np.pad(img,
+                     ((0, max(self.crop_size - img.shape[0], 0)),
+                      (0, max(self.crop_size - img.shape[1], 0)),
+                      (0, 0)), mode='constant', constant_values=0)
         img = Image.fromarray(img)
+
         gt = []
-        for label_year, label in zip(self.labels[patch]['years'], self.labels[patch]['data']):
-            cur_label = label[x:x+self.crop_size, y:y+self.crop_size]
+        if year in self.labels[patch]['years']:
+            idx = self.labels[patch]['years'].index(year)
+            cur_label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
             cur_label = np.pad(cur_label,
                                ((0, max(self.crop_size - cur_label.shape[0], 0)),
                                 (0, max(self.crop_size - cur_label.shape[1], 0)),
                                 ), mode='constant', constant_values=0)
             gt.append(Image.fromarray(cur_label))
+
         data = {
             'patch': patch,
             'data_years': [year],
@@ -170,12 +257,14 @@ class LglnDataset(Dataset):
             'input_img': [img],
             'gt_img': gt,
         }
-        data = self.pipeline(data)
+        data = getattr(self, f'{self.mode}_pipeline')(data)
         return data
 
     def collate_batch(self, data_list):
         data_dict = {}
         for k in data_list[0].keys():
+            if k == 'gt_img' and len(data_list[0][k]) == 0:
+                continue
             data = [x[k] for x in data_list]
             if isinstance(data[0], torch.Tensor):
                 data_dict[k] = torch.stack(data, dim=0)

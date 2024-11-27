@@ -10,6 +10,7 @@ import tqdm
 from torchvision.utils import make_grid
 from src.utils.logger import plt_to_image
 from src.utils.common import unpackbits
+from src.utils.train_utils import load_tensors_to_gpu
 
 
 class Hooks:
@@ -258,7 +259,7 @@ class LGLNSegPlotWriterHook(BaseHook):
             fig = plt.figure(figsize=(3*cols, 3*(rows + 1)))
             axs = fig.subplots(rows, cols)
             for r in range(rows):
-                axs[r, 0].imshow(input_img[r].transpose(1, 2, 0)[::2, ::2, ::-1])
+                axs[r, 0].imshow(input_img[r].transpose(1, 2, 0)[::2, ::2])
                 axs[r, 0].set_title(years[r])
                 confs = conf_img[r].transpose(2, 0, 1)
                 labels = gt_img[r]
@@ -364,6 +365,8 @@ class LGLNEvalHook(BaseHook):
         self.maps = set()
         self.max_xy = [0, 0]
         self.conf_channels = ['FlowingWater', 'Grassland', 'Settlement', 'StandingWater', 'Woodland']
+        self.ious = []
+        self.accs = []
 
     def set_logger(self, logger):
         self.log_dir = os.path.join(logger.logdir, 'holistic_seg_result')
@@ -379,24 +382,19 @@ class LGLNEvalHook(BaseHook):
             x, y = out_dict['x'][i], out_dict['y'][i]
             self.max_xy = [max(int(x), self.max_xy[0]), max(int(y), self.max_xy[1])]
             for j, year in enumerate(out_dict['data_years'][i]):
-                conf = out_dict['conf_img'][j, :, :].detach().cpu().numpy()
-                unc = out_dict['unc_img'][i].detach().cpu().numpy()
-                for c, k in enumerate(self.conf_channels):
-                    cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{k}.png'),
-                                conf[..., c] * 255)
-                cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_unc.png'), unc * 255)
+                cls = out_dict['conf_img'][j, :, :].argmax(-1).cpu().numpy()
+                cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}.png'), cls * 50)
 
     def post_epoch(self, runner, **kwargs):
         names = os.listdir(self.log_dir)
         for m in self.maps:
-            for k in self.conf_channels + ['unc']:
-                self.stitch(k, [n for n in names if (f'{k}.png' in n) and (m in n)])
+            self.stitch([n for n in names if m in n])
 
-    def stitch(self, key, names):
+    def stitch(self, names):
         patch, year, x, y = names[0].split('.')[0].split('_')[:4]
         name = f'{patch}_{year}'
         fullmap = np.zeros((self.max_xy[0] + self.input_size, self.max_xy[1] + self.input_size))
-        print(f"Stitching images for '{name}_{key}'...")
+        print(f"Stitching images for '{name}'...")
         for n in tqdm.tqdm(names):
             x, y = n.split('.')[0].split('_')[2:4]
             x = int(x)
@@ -408,11 +406,65 @@ class LGLNEvalHook(BaseHook):
             os.remove(f)
             fullmap[x:x + sx, y:y + sy] = res
 
-        cv2.imwrite(os.path.join(self.log_dir, f'{name}_{key}.png'), fullmap)
+        cv2.imwrite(os.path.join(self.log_dir, f'{name}.png'), fullmap)
 
-    def iou(self, pred, gt):
-        pred_cls = pred.argmax(axis=-1)
-        return 0
+
+class LGLNPseudoLabelHook(BaseHook):
+    def __init__(self, update_epoch_step=2, pos=0.5, neg=0.3, **kwargs):
+        super().__init__(**kwargs)
+        self.update_epoch_step = update_epoch_step
+        self.pos = pos
+        self.neg = neg
+        self.flag_terminate = False
+
+    def set_logger(self, logger):
+        pass
+
+    def pre_epoch(self, runner, **kwargs):
+        if (runner.epoch - 1) % self.update_epoch_step == 0:
+            dataset = runner.dataloader.dataset
+            pseudo_labels, has_new_labels = dataset.pre_update_pseudo_labels()
+            if has_new_labels:
+                runner.model.eval()
+                print("Generating pseudo labels ...")
+                with torch.no_grad():
+                    for data in tqdm.tqdm(dataset, total=len(dataset)):
+                        data = dataset.collate_batch([data])
+                        load_tensors_to_gpu(data, runner.gpu_id)
+                        data = runner.model.forward(data, epoch=runner.epoch, itr=runner.iter, gpu_id=runner.gpu_id)
+                        patch, x, y, year = data['patch'][0], data['x'][0], data['y'][0], data['data_years'][0][0]
+                        conf_img = data['conf_img'].squeeze()
+                        max_conf, plabel = conf_img.max(-1)
+                        ignore = (max_conf < self.pos) & (max_conf > self.neg)
+                        plabel[ignore] = -1
+                        idx = pseudo_labels[patch]['years'].index(year)
+                        sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape
+                        pseudo_labels[patch]['data'][idx][x:x+dataset.crop_size, y:y+dataset.crop_size] = \
+                            plabel.cpu().numpy()[:sz[0], :sz[1]]
+
+                # cv2.imwrite("/home/yuan/Downloads/tmp.jpg", pseudo_labels[patch]['data'][0].astype(np.uint8) * 50)
+                dataset.years = []
+                for k, v in pseudo_labels.items():
+                    for i, year in enumerate(v['years']):
+                        dataset.labels[k]['years'].append(year)
+                        dataset.labels[k]['data'].append(v['data'][i])
+                        dataset.labels[k]['size'].append(dataset.labels[k]['size'][0])
+                    dataset.years.extend(dataset.labels[k]['years'])
+                dataset.years = list(set(dataset.years))
+                dataset.parse_maps()
+                dataset.cfgs_to_train_mode()
+                runner.model.train()
+                runner.data_iter = iter(runner.dataloader)
+                runner.total_iter = len(runner.dataloader)
+            else:
+                self.flag_terminate = True
+
+    def post_epoch(self, runner, **kwargs):
+        runner.terminate = self.flag_terminate
+
+
+
+
 
 
 

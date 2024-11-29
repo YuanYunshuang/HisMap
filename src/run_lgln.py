@@ -5,7 +5,7 @@ import argparse
 
 import numpy as np
 
-from src.utils.misc import setup_logger
+from src.utils.misc import setup_logger, save_json, load_json
 from src.config import load_config, save_config
 from src.utils.train_utils import seed_everything
 from src.sdl_runner import SupervisedRunner
@@ -19,6 +19,36 @@ def parse_years(years):
         tmp = years.split('_')
         years = [str(x) for x in np.arange(int(tmp[0]), int(tmp[1]) + 1).tolist()]
         return years
+
+def update_label_info(labels, meta, years):
+    has_new_label = False
+    for k, v in labels.items():
+        start_idx = max(meta[k].index(v[0]) - 1, 0)
+        start_year = meta[k][start_idx]
+        if start_year not in v:
+            years.append(start_year)
+            labels[k].insert(0, start_year)
+            has_new_label = True
+        end_idx = min(meta[k].index(v[-1]) + 1, len(meta[k]) - 1)
+        end_year = meta[k][end_idx]
+        if end_year not in v:
+            years.append(end_year)
+            labels[k].append(end_year)
+            has_new_label = True
+    return labels, years, has_new_label
+
+
+def load_meta(data_path):
+    meta = {}
+    for x in sorted(os.listdir(os.path.join(data_path, 'train', 'maps'))):
+        patch, year = x.split('.')[0].split('_')
+        patch, year = int(patch), int(year)
+        if patch not in meta:
+            meta[patch] = []
+        meta[patch].append(year)
+    for k, v in meta.items():
+        meta[k] = sorted(v)
+    return meta
 
 
 if __name__ == "__main__":
@@ -58,101 +88,52 @@ if __name__ == "__main__":
     if args.data_path is not None:
         cfgs['DATASET']['data_path'] = args.data_path
 
-    path = "/home/yuan/data/HisMap/Hameln"
-    exps = [
-        '2016_2017',
-        '2011_2012',
-        '2002_2005',
-        '1995_1996',
-        '1991_1992',
-        '1985_1986',
-        '1982_1983',
-        '1978',
-        '1974_1975',  # no 3921
-        '1960_1961',
-        '1952_1955',
-        '1941_1945',
-        '1936_1937',  # no 3822
-        '1923_1926',  # no 3821
-        '1914_1919', # no 3921, 3922
-        '1897_1898'
-    ]
+    data_path = cfgs['DATASET']['data_path']
+    exp_dir = "/home/yuan/data/out/LGLN/peudo-0.5-0.3"
+    load_from = args.load_from
+    meta = load_meta(data_path)
 
-    missing_patches = {
-            '1974_1975': '3921', '1936_1937': '3822', '1923_1926': '3821', '1914_1919': '392'
-        }
-    ckpt_key = 'all'
-    exp_key = 'drop'
-    log_dir = f'{path}/exp_{exp_key}/seg4cls_'
-    max_epoch = 10
-    for i in range(len(exps) - 1):
-        years = exps[i]
-        next_years = exps[i + 1]
+    start_year = 1973
+    end_year = 1975
+    years = [x for x in range(start_year, end_year + 1)]
+    labels = {3821: [1974], 3822: [1975], 3921: [1973]}
 
-        # copy data
-        exp_dir = log_dir + years
-        os.makedirs(exp_dir, exist_ok=True)
-        shutil.copy(os.path.join(log_dir + ckpt_key, 'epoch50.pth'), os.path.join(exp_dir, 'epoch0.pth'))
+    json_file = os.path.join(exp_dir, "status.json")
+    if os.path.exists(json_file):
+        status = load_json(json_file)
+        labels = {int(k): v for k, v in status['labels'].items()}
+        years = status['years']
+        load_from = status['load_from']
 
-        if years in missing_patches:
-            missing_patch = missing_patches[years]
-            src_dir = exps[exps.index(years) - 1]
-            files = glob.glob(f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{src_dir}/{missing_patch}*.png')
-            for f in files:
-                shutil.copy(f, f.replace(src_dir, years))
+    # labels, years, has_new_label = update_label_info(labels, meta, years)
+    # years = sorted(list(set(years)))
+    # load_from = "/home/yuan/data/out/LGLN/peudo-0.5-0.3/pseudo_11-29-15-57-17"
+
+    while True:
+        try:
+            # train
+            cfgs['TRAIN']['run_name'] = 'pseudo'
+            cfgs['TRAIN']['log_dir'] = exp_dir
+            cfgs['TRAIN']['load_from'] = load_from
+            cfgs['DATASET']['years'] = years
+
+            ss = "=======TRAIN=======\n"
+            ss += f"LOG_DIR: {exp_dir}\n"
+            ss += f"TRAIN_YEARS: {years}\n"
+            print(ss)
+            sdl_runner = SupervisedRunner(args, cfgs)
+            save_config(cfgs, sdl_runner.runner.logdir)
+            sdl_runner.run()
+
+            # update config
+            labels, years, has_new_label = update_label_info(labels, meta, years)
+            if not has_new_label:
+                break
+            years = sorted(list(set(years)))
+            load_from = sdl_runner.runner.logdir
+        except Exception as e:
+            save_json({'labels': labels, 'years': years, 'load_from': load_from}, os.path.join(exp_dir, "status.json"))
+            raise e
 
 
-        # train
-        args.mode = 'train'
-        args.log_dir = exp_dir
-        args.config = os.path.join(exp_dir, 'config.yaml')
-        args.load_from = exp_dir
-        cfgs['TRAIN']['run_name'] = None
-        cfgs['TRAIN']['load_from'] = args.load_from
-        cfgs['TRAIN']['log_dir'] = args.load_from
-        cfgs['TRAIN']['save_path'] = args.load_from
-        cfgs['TRAIN']['max_epoch'] = max_epoch
-        cfgs['TRAIN']['lr_scheduler']['milestones'] = [5]
-        cfgs['TRAIN']['optimizer']['lr'] = 0.00002
-        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{years}'
-        train_years = parse_years(next_years) + parse_years(years)
-        cfgs['DATASET']['train_year'] = train_years
-        cfgs['DATASET']['data_path'] = f'{path}/train_data'
-        ss = "=======TRAIN=======\n"
-        ss += f"LOG_DIR: {exp_dir}\n"
-        ss += f"TRAIN_YEARS: {train_years}\n"
-        ss += f"GT_DIR: {cfgs['DATASET']['gt_dir']}\n"
-        print(ss)
-        sdl_runner = SupervisedRunner(args, cfgs)
-        save_config(cfgs, sdl_runner.runner.logdir)
-        sdl_runner.run()
 
-        # test
-        args.mode = 'test'
-        args.log_dir = args.load_from
-        cfgs['DATASET']['gt_dir'] = f'{path}/seg4cls_train_{exp_key}/gt_pseudo_{years}'
-        cfgs['TEST']['load_from'] = args.load_from
-        cfgs['TEST']['log_dir'] = args.load_from
-        test_years = parse_years(next_years)
-        cfgs['DATASET']['test_year'] = test_years
-        ss = "=======TEST=======\n"
-        ss += f"LOG_DIR: {args.log_dir}\n"
-        ss += f"TEST_YEARS: {test_years}\n"
-        ss += f"GT_DIR: {cfgs['DATASET']['gt_dir']}\n"
-        print(ss)
-        sdl_runner = SupervisedRunner(args, cfgs)
-        sdl_runner.run()
-
-        # generate pseudo labels
-        ss = "=======GENERATE PSEUDO LABELS=======\n"
-        ss += f"PRED_dir: seg4cls_{years}\n"
-        ss += f"OUT_DIR: gt_pseudo_{next_years}"
-        print(ss)
-        generate_4cls_softpseudo_labels(
-            f"{path}/exp_{exp_key}/seg4cls_{years}/epoch{max_epoch}/holistic_seg_result",
-            f"{path}/seg4cls_train_{exp_key}/gt_pseudo_{next_years}",
-            ['agr', 'for', 'wat', 'set'],
-            # thr=0.4
-        )
-
-        last_years = years

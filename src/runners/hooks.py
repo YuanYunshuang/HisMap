@@ -410,23 +410,23 @@ class LGLNEvalHook(BaseHook):
 
 
 class LGLNPseudoLabelHook(BaseHook):
-    def __init__(self, update_epoch_step=2, pos=0.5, neg=0.3, **kwargs):
+    def __init__(self, pos=0.5, neg=0.3, **kwargs):
         super().__init__(**kwargs)
-        self.update_epoch_step = update_epoch_step
         self.pos = pos
         self.neg = neg
-        self.flag_terminate = False
 
     def set_logger(self, logger):
         pass
 
-    def pre_epoch(self, runner, **kwargs):
-        if (runner.epoch - 1) % self.update_epoch_step == 0:
+    def post_epoch(self, runner, **kwargs):
+        if runner.epoch == runner.total_epochs:
             dataset = runner.dataloader.dataset
             pseudo_labels, has_new_labels = dataset.pre_update_pseudo_labels()
             if has_new_labels:
                 runner.model.eval()
-                print("Generating pseudo labels ...")
+                print("Generating pseudo labels for:")
+                for k, v in pseudo_labels.items():
+                    print(f"{k}: {', '.join([str(x) for x in v['years']])}")
                 with torch.no_grad():
                     for data in tqdm.tqdm(dataset, total=len(dataset)):
                         data = dataset.collate_batch([data])
@@ -436,32 +436,16 @@ class LGLNPseudoLabelHook(BaseHook):
                         conf_img = data['conf_img'].squeeze()
                         max_conf, plabel = conf_img.max(-1)
                         ignore = (max_conf < self.pos) & (max_conf > self.neg)
-                        plabel[ignore] = 255
+                        plabel[ignore] = -1
                         idx = pseudo_labels[patch]['years'].index(year)
                         sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape
                         pseudo_labels[patch]['data'][idx][x:x+dataset.crop_size, y:y+dataset.crop_size] = \
-                            plabel.cpu().numpy()[:sz[0], :sz[1]].astype(np.uint8)
+                            plabel.cpu().numpy()[:sz[0], :sz[1]].astype(np.int8)
 
                 # cv2.imwrite("/home/yuan/Downloads/tmp.jpg", pseudo_labels[patch]['data'][0].astype(np.uint8) * 50)
-                dataset.years = []
-                for k, v in pseudo_labels.items():
-                    for i, year in enumerate(v['years']):
-                        dataset.labels[k]['years'].append(year)
-                        dataset.labels[k]['data'].append(v['data'][i])
-                        dataset.labels[k]['size'].append(dataset.labels[k]['size'][0])
-                    dataset.years.extend(dataset.labels[k]['years'])
-                dataset.years = list(set(dataset.years))
-                dataset.parse_maps()
-                dataset.cfgs_to_train_mode()
-                runner.model.train()
-                runner.data_iter = iter(runner.dataloader)
-                runner.total_iter = len(runner.dataloader)
-                runner.logger.update_log_msg(runner.total_iter)
-            else:
-                self.flag_terminate = True
+                dataset.post_update_pseudo_labels(pseudo_labels)
 
-    def post_epoch(self, runner, **kwargs):
-        runner.terminate = self.flag_terminate
+
 
 
 

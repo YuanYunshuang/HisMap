@@ -8,6 +8,7 @@ import cv2
 from PIL import Image
 import numpy as np
 import torch
+from sympy.physics.units import years
 from torch.utils.data import DataLoader, Dataset
 
 from src.dataset.pipeline import Pipeline
@@ -19,7 +20,9 @@ class LglnDataset(Dataset):
     def __init__(self,
                  cfgs,
                  mode='train',
-                 load_to_memory=False
+                 load_to_memory=False,
+                 pseudo_label=True,
+                 reparse_pseudo_label=False,
     ):
         self.root_dir = cfgs['data_path']
         self.map_dir = os.path.join(self.root_dir, mode, 'maps')
@@ -31,13 +34,17 @@ class LglnDataset(Dataset):
         self.crop_size = cfgs['crop_size']
         self.max_num_img = cfgs.get('max_num_img', 4)
         self.load_to_memory = load_to_memory
+        self.pseudo_label = pseudo_label
+        self.reparse_pseudo_label = reparse_pseudo_label
 
         self.parse_meta(cfgs)
         if load_to_memory:
             self.load_maps()
+            self.load_labels()
         else:
             self.parse_maps()
-        self.load_labels()
+            self.parse_labels()
+
         self.train_pipeline = Pipeline(cfgs['train_pipeline'])
         self.test_pipeline = Pipeline(cfgs['test_pipeline'])
 
@@ -54,7 +61,8 @@ class LglnDataset(Dataset):
         for k, v in self.meta.items():
             self.meta[k] = sorted(v)
         if 'years' in cfgs:
-            self.years = [int(year) for year in cfgs['years'].split(',')]
+            years = cfgs['years'].split(',') if isinstance(cfgs['years'], str) else cfgs['years']
+            self.years = [int(year) for year in years]
         else:
             start_year = cfgs['start_year']
             end_year = cfgs['end_year']
@@ -87,7 +95,7 @@ class LglnDataset(Dataset):
 
     def parse_maps(self):
         # parse maps in valid age
-        maps = {}
+        self.maps = {}
         print("Parsing maps images...")
         self.samples = []
         if not os.path.exists(self.img_dir):
@@ -111,7 +119,7 @@ class LglnDataset(Dataset):
                 patch, year, x, y = x.split('.')[0].split('_')
                 if int(year) in self.years:
                     self.samples.append([int(patch), int(year), int(x), int(y)])
-
+            # self.samples = self.samples[:16*20]
         print(f"Found {len(self.samples)} image samples.")
 
     def load_gts(self):
@@ -147,37 +155,65 @@ class LglnDataset(Dataset):
                 labels[patch]['size'].append(TIFs.shape)
         self.labels = labels
 
-    def load_labels(self):
+    def load_labels(self, meta_only=False):
         labels = {}
         print("\nLoading labels ...")
         for x in tqdm.tqdm(sorted(os.listdir(self.label_dir))):
             patch, year = x.split('.')[0].split('_')
             patch, year = int(patch), int(year)
             if patch not in labels:
-                labels[patch] = {'years': [], 'size': [], 'data': []}
+                if meta_only:
+                    labels[patch] = {'years': [], 'size': []}
+                else:
+                    labels[patch] = {'years': [], 'size': [], 'data': []}
             if year in self.years:
                 cur_label = cv2.imread(os.path.join(self.label_dir, x), cv2.IMREAD_UNCHANGED) / 50
-                labels[patch]['data'].append(cur_label)
+                if not meta_only:
+                    labels[patch]['data'].append(cur_label.astype(np.int8))
                 labels[patch]['years'].append(year)
                 labels[patch]['size'].append(cur_label.shape)
         self.labels = labels
 
+    def parse_labels(self):
+        self.pseudo_label_dir = os.path.join(self.root_dir, self.mode, 'pseudo_label')
+        os.makedirs(self.pseudo_label_dir, exist_ok=True)
+        if self.reparse_pseudo_label:
+            self.load_labels()
+            for info in self.samples:
+                patch, year, x, y = info
+                if year not in self.labels[patch]['years']:
+                    continue
+                idx = self.labels[patch]['years'].index(year)
+                label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
+                label = np.pad(label,
+                               ((0, max(self.crop_size - label.shape[0], 0)),
+                                (0, max(self.crop_size - label.shape[1], 0)),
+                                ), mode='constant', constant_values=0)
+                filename = f"{patch}_{year}_{x}_{y}.png"
+                cv2.imwrite(os.path.join(self.pseudo_label_dir, filename), label)
+            for k, v in self.labels.items():
+                v.pop('data')
+        else:
+            self.load_labels(meta_only=True)
+        for k, v in self.meta.items():
+            for y in v:
+                if y in self.years and y not in self.labels[k]['years']:
+                    self.labels[k]['years'].append(y)
+            self.labels[k]['years'] = sorted(self.labels[k]['years'])
+
+
+
     def cfgs_to_pseudo_label_mode(self):
-        self.original_configs = {
-            'mode': getattr(self, 'mode'),
-            'load_to_memory': getattr(self, 'load_to_memory'),
-            'crop_size': getattr(self, 'crop_size'),
-            'crop_step_size': getattr(self, 'crop_step_size'),
-            'maps': copy.deepcopy(getattr(self, 'maps', None)),
+        self.original_config = {
+            'mode': self.mode,
+            'crop_size': self.crop_size,
+            'crop_step_size': self.crop_step_size,
+            'load_to_memory': self.load_to_memory,
         }
         self.mode = 'test'
         self.load_to_memory = True
         self.crop_size = 1024
         self.crop_step_size = 1024
-
-    def cfgs_to_train_mode(self):
-        for k, v in self.original_configs.items():
-            setattr(self, k, v)
 
 
     def pre_update_pseudo_labels(self, step=1):
@@ -196,35 +232,66 @@ class LglnDataset(Dataset):
 
             if start_idx >= 0:
                 pseudo_labels[k]['years'].append(self.meta[k][start_idx])
-                pseudo_labels[k]['data'].append(np.zeros_like(v['data'][0]))
+                pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
                 has_new_labels = True
             if end_idx < len(self.meta[k]):
                 pseudo_labels[k]['years'].append(self.meta[k][end_idx])
-                pseudo_labels[k]['data'].append(np.zeros_like(v['data'][0]))
+                pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
                 has_new_labels = True
 
-            # load maps for pseudo labels
-            self.maps[k] = {'years': [], 'size': [], 'data': []}
-            for year in pseudo_labels[k]['years']:
-                TIF = read_tiff(os.path.join(self.map_dir, f"{k}_{year}.tif"))
-                self.maps[k]['years'].append(year)
-                self.maps[k]['size'].append(TIF.shape)
-                self.maps[k]['data'].append(TIF)
-                map_size = TIF.shape
-                x = np.arange(0, map_size[0], self.crop_step_size)
-                y = np.arange(0, map_size[1], self.crop_step_size)
-                xy = np.stack(np.meshgrid(x, y), axis=-1).reshape(-1, 2)
-                self.samples.extend(np.concatenate([np.zeros_like(xy[:, :1]) + k,
-                                                    np.zeros_like(xy[:, :1]) + year, xy], axis=-1))
+        # load maps for pseudo labels
+        if has_new_labels:
+            for k, v in self.labels.items():
+                self.maps[k] = {'years': [], 'size': [], 'data': []}
+                for year in pseudo_labels[k]['years']:
+                    TIF = read_tiff(os.path.join(self.map_dir, f"{k}_{year}.tif"))
+                    self.maps[k]['years'].append(year)
+                    self.maps[k]['size'].append(TIF.shape)
+                    self.maps[k]['data'].append(TIF)
+                    map_size = TIF.shape
+                    x = np.arange(0, map_size[0], self.crop_size)
+                    y = np.arange(0, map_size[1], self.crop_size)
+                    xy = np.stack(np.meshgrid(x, y), axis=-1).reshape(-1, 2)
+                    self.samples.extend(np.concatenate([np.zeros_like(xy[:, :1]) + k,
+                                                        np.zeros_like(xy[:, :1]) + year, xy], axis=-1))
         return pseudo_labels, has_new_labels
 
+    def post_update_pseudo_labels(self, pseudo_labels):
+        for k, v in self.original_config.items():
+            setattr(self, k, v)
+        for k, v in pseudo_labels.items():
+            for i, year in enumerate(v['years']):
+                map_size = self.maps[k]['size'][i]
+                x = np.arange(0, map_size[0], self.crop_step_size)
+                y = np.arange(0, map_size[1], self.crop_step_size)
+                xys = np.stack(np.meshgrid(x, y), axis=-1).reshape(-1, 2)
+                for xy in xys:
+                    label = v['data'][i][xy[0]:xy[0]+self.crop_size, xy[1]:xy[1]+self.crop_size]
+                    filename = os.path.join(self.pseudo_label_dir, f"{k}_{year}_{xy[0]}_{xy[1]}.png")
+                    cv2.imwrite(filename, label)
+                self.labels[k]['years'].append(year)
+                self.labels[k]['size'].append(self.labels[k]['size'][0])
 
-    def __len__(self):
-        return len(self.samples)
 
-    def __getitem__(self, item):
-        patch, year, x, y = self.samples[item]
-        if self.load_to_memory:
+    def get_label(self, patch, year, x, y):
+        if patch in self.labels and 'data' in self.labels[patch] and year in self.labels[patch]['years']:
+            idx = self.labels[patch]['years'].index(year)
+            label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
+            label = np.pad(label,
+                               ((0, max(self.crop_size - label.shape[0], 0)),
+                                (0, max(self.crop_size - label.shape[1], 0)),
+                                ), mode='constant', constant_values=0)
+        else:
+            file = os.path.join(self.pseudo_label_dir, f"{patch}_{year}_{x}_{y}.png")
+            if os.path.exists(file):
+                label = cv2.imread(file, cv2.IMREAD_UNCHANGED)
+            else:
+                label = None
+
+        return label
+
+    def get_img(self, patch, year, x, y):
+        if hasattr(self, 'maps') and patch in self.maps:
             img = self.maps[patch]['data'][self.maps[patch]['years'].index(year)][
                   x:x+self.crop_size, y:y+self.crop_size]
             if img.ndim == 2:
@@ -232,29 +299,32 @@ class LglnDataset(Dataset):
         else:
             filename = f"{patch}_{year}_{x}_{y}.jpg"
             img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_COLOR)
+
         img = np.pad(img,
                      ((0, max(self.crop_size - img.shape[0], 0)),
                       (0, max(self.crop_size - img.shape[1], 0)),
                       (0, 0)), mode='constant', constant_values=0)
-        img = Image.fromarray(img)
+        return img
 
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, item):
+        patch, year, x, y = self.samples[item]
+        img = self.get_img(patch, year, x, y)
+        label = self.get_label(patch, year, x, y)
+        imgs = [Image.fromarray(img)]
         gt = []
-        if year in self.labels[patch]['years']:
-            idx = self.labels[patch]['years'].index(year)
-            cur_label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
-            cur_label = np.pad(cur_label,
-                               ((0, max(self.crop_size - cur_label.shape[0], 0)),
-                                (0, max(self.crop_size - cur_label.shape[1], 0)),
-                                ), mode='constant', constant_values=0)
-            gt.append(Image.fromarray(cur_label))
+        if label is not None:
+            gt = [Image.fromarray(label)]
 
         data = {
             'patch': patch,
             'data_years': [year],
             'x': x,
             'y': y,
-            'gt_years': self.labels[patch]['years'],
-            'input_img': [img],
+            'gt_years': [year],
+            'input_img': imgs,
             'gt_img': gt,
         }
         data = getattr(self, f'{self.mode}_pipeline')(data)
@@ -273,6 +343,7 @@ class LglnDataset(Dataset):
                 data_dict[k] = torch.cat(data, dim=0)
             else:
                 data_dict[k] = data
+
         return data_dict
 
 

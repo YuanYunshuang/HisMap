@@ -50,28 +50,39 @@ def draw_contra_map(res_dir, gt_dir, cls='for'):
         cv2.imwrite(os.path.join(os.path.dirname(res_dir), 'contra_map', basename + '.png'), gt[:H, :W])
 
 
+def eval_lgln(res_dir, gt_dir):
+    maps = os.listdir(res_dir)
+    eval_res = []
+    ss = ""
+    for m in maps:
+        pred_file = os.path.join(res_dir, m)
+        label_file = os.path.join(gt_dir, m)
+        pred = cv2.imread(pred_file, cv2.IMREAD_UNCHANGED) / 50
+        gt = cv2.imread(label_file, cv2.IMREAD_UNCHANGED) / 50
+        pred = pred[:gt.shape[0], :gt.shape[1]]
+        ious = []
+        ss += f"{m.split('.')[0]}:\n"
+        for i in range(1, 6):
+            pred_mask = pred == i
+            gt_mask = gt == i
+            intersection = np.logical_and(pred_mask, gt_mask).sum()
+            union = np.logical_or(pred_mask, gt_mask).sum()
+            iou = intersection / max(union, 1)
+            ss += f"  {iou*100:.1f}"
+            ious.append(iou)
+        acc = (pred == gt).sum() / gt.size
+        ss += f"  |  {acc*100:.1f}\n"
+        eval_res.append(ious)
+    print(ss)
+    with open(os.path.join(os.path.dirname(res_dir), 'eval.txt'), 'w') as f:
+        f.write(ss)
+
+
+
 if __name__ == '__main__':
-    # for exp in ['seg4cls_edl', 'seg4cls_focal', 'seg4cls_ce', 'seg4cls_focedl']:
-    #     print(exp)
-    #     eval(f'/home/yuan/code/HisMap/logs/{exp}/epoch50/holistic_seg_result',
-    #          '/home/yuan/data/HisMap/Hameln/raster_gt',
-    #          'for')
-
-    # draw_contra_map(
-    #     f'/home/yuan/code/HisMap/logs/seg4cls_ce/epoch50/holistic_seg_result',
-    #      '/home/yuan/data/HisMap/Hameln/raster_gt',
-    #      'for')
-
-    map_dict = {}
-    H = W = 20000000
-    for mp in ['3821_2016', '3822_2016', '3921_2017', '3922_2017']:
-        tif = read_tiff(f"/home/yuan/data/HisMap/Hameln/TK_projektiv_entzerrt_1m/{mp}.tif")
-        map_dict[mp] = tif[::5, ::5, ::-1]
-        H = min(H, map_dict[mp].shape[0])
-        W = min(W, map_dict[mp].shape[1])
-    full_map1 = np.concatenate([map_dict['3821_2016'][:H, :W], map_dict['3822_2016'][:H, :W]], axis=1)
-    full_map2 = np.concatenate([map_dict['3921_2017'][:H, :W], map_dict['3922_2017'][:H, :W]], axis=1)
-    full_map = np.concatenate([full_map1, full_map2], axis=0)
-    cv2.imwrite("/home/yuan/Downloads/fullmap.jpg", full_map)
+    eval_lgln(
+        "/home/yuan/data/out/LGLN/pseudo-0.4-0.2/pseudo_12-03-22-23-58/epoch5/holistic_seg_result",
+        "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    )
 
 

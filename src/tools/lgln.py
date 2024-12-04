@@ -1,6 +1,7 @@
 import os
 import shutil
 from glob import glob
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -86,10 +87,24 @@ def remap_label(in_path):
             cv2.imwrite(os.path.join(out_path, f"{patch}_{year}.png"), remapped_label)
 
 
+def crop_sample_map(path):
+    map1898 = read_tiff(os.path.join(path, "3821_1898.tif"))
+    map1974 = read_tiff(os.path.join(path, "3821_1974.tif"))
+    map2016 = read_tiff(os.path.join(path, "3821_2016.tif"))
+
+    x = 3700
+    y = 700
+    sz = 1600
+
+    cv2.imwrite(os.path.join(path.replace('maps', 'ica2025'), "3821_1898.jpg"), map1898[x:x+sz, y:y+sz])
+    cv2.imwrite(os.path.join(path.replace('maps', 'ica2025'), "3821_1974.jpg"), map1974[x:x+sz, y:y+sz, ::-1])
+    cv2.imwrite(os.path.join(path.replace('maps', 'ica2025'), "3821_2016.jpg"), map2016[x:x+sz, y:y+sz, ::-1])
+
+
 
 if __name__ == '__main__':
-    path = "/home/yuan/data/HisMap/LGLN/dataset/train/gt"
-    remap_label(path)
+    path = "/home/yuan/data/HisMap/LGLN/dataset/train/maps"
+
 
 
 

@@ -21,8 +21,7 @@ class LglnDataset(Dataset):
                  cfgs,
                  mode='train',
                  load_to_memory=False,
-                 pseudo_label=True,
-                 reparse_pseudo_label=False,
+                 pseudo_label=True
     ):
         self.root_dir = cfgs['data_path']
         self.map_dir = os.path.join(self.root_dir, mode, 'maps')
@@ -36,7 +35,7 @@ class LglnDataset(Dataset):
         self.labels_info = cfgs.get('labels', None)
         self.load_to_memory = load_to_memory
         self.pseudo_label = pseudo_label
-        self.reparse_pseudo_label = reparse_pseudo_label
+        self.reparse_pseudo_label = cfgs.get('reparse_pseudo_label', False)
 
         self.parse_meta(cfgs)
         if load_to_memory or self.mode == 'test':

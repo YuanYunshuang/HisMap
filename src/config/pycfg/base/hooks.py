@@ -18,7 +18,7 @@ lgln_train_hooks_pseudo = [
         dict(type='TrainTimerHook'),
         dict(type='LGLNPseudoLabelHook'),
         dict(type="CheckPointsHook", epoch_every=10),
-        dict(type="LGLNSegPlotWriterHook", max_n_img=2, log_every=100)
+        # dict(type="LGLNSegPlotWriterHook", max_n_img=2, log_every=100)
     ]
 
 test_hooks = [

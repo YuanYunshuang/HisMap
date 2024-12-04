@@ -23,13 +23,15 @@ def parse_years(years):
 def update_label_info(labels, meta, years):
     has_new_label = False
     for k, v in labels.items():
-        start_idx = max(meta[k].index(v[0]) - 1, 0)
+        min_year = min(v)
+        start_idx = max(meta[k].index(min_year) - 1, 0)
         start_year = meta[k][start_idx]
         if start_year not in v:
             years.append(start_year)
             labels[k].insert(0, start_year)
             has_new_label = True
-        end_idx = min(meta[k].index(v[-1]) + 1, len(meta[k]) - 1)
+        max_year = max(v)
+        end_idx = min(meta[k].index(max_year) + 1, len(meta[k]) - 1)
         end_year = meta[k][end_idx]
         if end_year not in v:
             years.append(end_year)
@@ -66,6 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", type=str)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--n-workers", type=int)
+    parser.add_argument("--unc-thr", type=float, default=0.5)
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -88,8 +91,14 @@ if __name__ == "__main__":
     if args.data_path is not None:
         cfgs['DATASET']['data_path'] = args.data_path
 
+    for hook in cfgs['TRAIN']['hooks']:
+        if hook['type'] == 'LGLNPseudoLabelHook':
+            hook['unc'] = args.unc_thr
+
     data_path = cfgs['DATASET']['data_path']
-    exp_dir = "/home/yuan/data/out/LGLN/peudo-0.5-0.3"
+    hook_PL = cfgs['TRAIN']['hooks']
+    exp_dir = f"{args.log_dir}/pseudo-{args.unc_thr:.1f}"
+    os.makedirs(exp_dir, exist_ok=True)
     load_from = args.load_from
     meta = load_meta(data_path)
 
@@ -116,10 +125,14 @@ if __name__ == "__main__":
             cfgs['TRAIN']['log_dir'] = exp_dir
             cfgs['TRAIN']['load_from'] = load_from
             cfgs['DATASET']['years'] = years
+            cfgs['DATASET']['labels'] = labels
 
             ss = "=======TRAIN=======\n"
             ss += f"LOG_DIR: {exp_dir}\n"
             ss += f"TRAIN_YEARS: {years}\n"
+            ss += f"LABEL_INFO:\n"
+            for k, v in labels.items():
+                ss += f"{k}: {v}\n"
             print(ss)
             sdl_runner = SupervisedRunner(args, cfgs)
             save_config(cfgs, sdl_runner.runner.logdir)
@@ -131,6 +144,7 @@ if __name__ == "__main__":
                 break
             years = sorted(list(set(years)))
             load_from = sdl_runner.runner.logdir
+            save_json({'labels': labels, 'years': years, 'load_from': load_from}, os.path.join(exp_dir, "status.json"))
         except Exception as e:
             save_json({'labels': labels, 'years': years, 'load_from': load_from}, os.path.join(exp_dir, "status.json"))
             raise e

@@ -73,6 +73,7 @@ def eval_lgln(res_dir, gt_dir):
         acc = (pred == gt).sum() / gt.size
         ss += f"  |  {acc*100:.1f}\n"
         eval_res.append(ious)
+    print(ss)
     with open(os.path.join(os.path.dirname(res_dir), 'eval.txt'), 'w') as f:
         f.write(ss)
 
@@ -80,7 +81,7 @@ def eval_lgln(res_dir, gt_dir):
 
 if __name__ == '__main__':
     eval_lgln(
-        "/home/yuan/data/out/LGLN/lgln-1973-1975/epoch20/holistic_seg_result",
+        "/home/yuan/data/out/LGLN/pseudo-0.4-0.2/pseudo_12-03-22-23-58/epoch5/holistic_seg_result",
         "/home/yuan/data/HisMap/LGLN/dataset/test/label"
     )
 

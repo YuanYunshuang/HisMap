@@ -410,10 +410,9 @@ class LGLNEvalHook(BaseHook):
 
 
 class LGLNPseudoLabelHook(BaseHook):
-    def __init__(self, pos=0.5, neg=0.3, **kwargs):
+    def __init__(self, unc=0.5, **kwargs):
         super().__init__(**kwargs)
-        self.pos = pos
-        self.neg = neg
+        self.unc = unc
 
     def set_logger(self, logger):
         pass
@@ -435,7 +434,8 @@ class LGLNPseudoLabelHook(BaseHook):
                         patch, x, y, year = data['patch'][0], data['x'][0], data['y'][0], data['data_years'][0][0]
                         conf_img = data['conf_img'].squeeze()
                         max_conf, plabel = conf_img.max(-1)
-                        ignore = (max_conf < self.pos) & (max_conf > self.neg)
+                        # ignore = (max_conf < self.pos) & (max_conf > self.neg)
+                        ignore = data['unc_img'].squeeze() < self.unc
                         plabel[ignore] = -1
                         idx = pseudo_labels[patch]['years'].index(year)
                         sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape

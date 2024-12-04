@@ -33,12 +33,13 @@ class LglnDataset(Dataset):
         self.crop_step_size = cfgs['crop_step_size']
         self.crop_size = cfgs['crop_size']
         self.max_num_img = cfgs.get('max_num_img', 4)
+        self.labels_info = cfgs.get('labels', None)
         self.load_to_memory = load_to_memory
         self.pseudo_label = pseudo_label
         self.reparse_pseudo_label = reparse_pseudo_label
 
         self.parse_meta(cfgs)
-        if load_to_memory:
+        if load_to_memory or self.mode == 'test':
             self.load_maps()
             self.load_labels()
         else:
@@ -117,8 +118,12 @@ class LglnDataset(Dataset):
         else:
             for x in os.listdir(self.img_dir):
                 patch, year, x, y = x.split('.')[0].split('_')
-                if int(year) in self.years:
-                    self.samples.append([int(patch), int(year), int(x), int(y)])
+                patch, year, x, y = int(patch), int(year), int(x), int(y)
+                if self.labels_info is not None:
+                    if year in self.labels_info[patch]:
+                        self.samples.append([patch, year, x, y])
+                elif int(year) in self.years:
+                    self.samples.append([patch, year, x, y])
             # self.samples = self.samples[:16*20]
         print(f"Found {len(self.samples)} image samples.")
 
@@ -224,8 +229,8 @@ class LglnDataset(Dataset):
         self.samples = []
         print("Loading maps for generating pseudo labels ...")
         for k, v in self.labels.items():
-            start_year = min(v['years'])
-            end_year = max(v['years'])
+            start_year = min(self.labels_info[k])
+            end_year = max(self.labels_info[k])
             start_idx = self.meta[k].index(start_year) - 1
             end_idx = self.meta[k].index(end_year) + 1
             pseudo_labels[k] = {'years': [], 'data': []}
@@ -241,9 +246,9 @@ class LglnDataset(Dataset):
 
         # load maps for pseudo labels
         if has_new_labels:
-            for k, v in self.labels.items():
+            for k, v in pseudo_labels.items():
                 self.maps[k] = {'years': [], 'size': [], 'data': []}
-                for year in pseudo_labels[k]['years']:
+                for year in v['years']:
                     TIF = read_tiff(os.path.join(self.map_dir, f"{k}_{year}.tif"))
                     self.maps[k]['years'].append(year)
                     self.maps[k]['size'].append(TIF.shape)
@@ -271,6 +276,7 @@ class LglnDataset(Dataset):
                     cv2.imwrite(filename, label)
                 self.labels[k]['years'].append(year)
                 self.labels[k]['size'].append(self.labels[k]['size'][0])
+                # self.labels_info[k].append(year)
 
 
     def get_label(self, patch, year, x, y):
@@ -317,6 +323,8 @@ class LglnDataset(Dataset):
         gt = []
         if label is not None:
             gt = [Image.fromarray(label)]
+        elif self.mode == 'train':
+            print(f"No label found: patch {patch}, year {year}, x {x}, y {y}")
 
         data = {
             'patch': patch,

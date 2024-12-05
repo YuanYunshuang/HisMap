@@ -167,7 +167,7 @@ if __name__ == "__main__":
     # eval
     eval_lgln(
         f"{sdl_runner.runner.logdir}/epoch5/holistic_seg_result",
-        "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+        f"{data_path}/test/label"
     )
 
 

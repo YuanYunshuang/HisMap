@@ -435,7 +435,7 @@ class LGLNPseudoLabelHook(BaseHook):
                         conf_img = data['conf_img'].squeeze()
                         max_conf, plabel = conf_img.max(-1)
                         # ignore = (max_conf < self.pos) & (max_conf > self.neg)
-                        ignore = data['unc_img'].squeeze() < self.unc
+                        ignore = data['unc_img'].squeeze() > self.unc
                         plabel[ignore] = -1
                         idx = pseudo_labels[patch]['years'].index(year)
                         sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape

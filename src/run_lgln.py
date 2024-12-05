@@ -10,6 +10,7 @@ from src.config import load_config, save_config
 from src.utils.train_utils import seed_everything
 from src.sdl_runner import SupervisedRunner
 from src.tools.hameln import generate_4cls_pseudo_labels, generate_4cls_softpseudo_labels
+from src.tools.eval import eval_lgln
 
 
 def parse_years(years):
@@ -151,6 +152,23 @@ if __name__ == "__main__":
         except Exception as e:
             save_json({'labels': labels, 'years': years, 'load_from': load_from}, os.path.join(exp_dir, "status.json"))
             raise e
+
+    # test
+    cfgs['DATASET']['years'] = [1898,1974,1982,1996]
+    cfgs['DATASET']['crop_size'] = 1024
+    cfgs['DATASET']['crop_step_size'] = 1024
+    cfgs['DATASET']['batch_size'] = 1
+    cfgs['DATASET']['mode'] = 'test'
+    args.load_from = sdl_runner.runner.logdir
+
+    sdl_runner = SupervisedRunner(args, cfgs)
+    sdl_runner.run()
+
+    # eval
+    eval_lgln(
+        f"{sdl_runner.runner.logdir}/epoch5/holistic_seg_result",
+        "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    )
 
 
 

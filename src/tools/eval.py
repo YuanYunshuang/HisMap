@@ -81,7 +81,7 @@ def eval_lgln(res_dir, gt_dir):
 
 if __name__ == '__main__':
     eval_lgln(
-        "/home/yuan/data/out/LGLN/pseudo-0.4-0.2/pseudo_12-03-22-23-58/epoch5/holistic_seg_result",
+        "/home/yuan/data/out/LGLN/pseudo-0.5/pseudo_12-04-23-14-49/epoch5/holistic_seg_result",
         "/home/yuan/data/HisMap/LGLN/dataset/test/label"
     )
 

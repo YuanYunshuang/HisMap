@@ -122,24 +122,6 @@ if __name__ == "__main__":
     # years = sorted(list(set(years)))
     # load_from = "/home/yuan/data/out/LGLN/peudo-0.5-0.3/pseudo_11-29-15-57-17"
 
-    # test
-    cfgs['DATASET']['years'] = [1898,1974,1982,1996]
-    cfgs['DATASET']['crop_size'] = 1024
-    cfgs['DATASET']['crop_step_size'] = 1024
-    cfgs['DATASET']['batch_size'] = 1
-    cfgs['DATASET']['mode'] = 'test'
-    cfgs['TEST']['load_from'] = args.load_from
-    args.mode = "test"
-
-    sdl_runner = SupervisedRunner(args, cfgs)
-    sdl_runner.run()
-
-    # eval
-    eval_lgln(
-        f"{args.load_from}/epoch5/holistic_seg_result",
-        f"{data_path}/test/label"
-    )
-
     while True:
         try:
             # train

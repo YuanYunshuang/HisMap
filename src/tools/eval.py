@@ -51,7 +51,7 @@ def draw_contra_map(res_dir, gt_dir, cls='for'):
 
 
 def eval_lgln(res_dir, gt_dir):
-    maps = os.listdir(res_dir)
+    maps = sorted(os.listdir(res_dir))
     eval_res = []
     ss = ""
     for m in maps:

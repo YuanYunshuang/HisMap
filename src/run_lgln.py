@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
     # eval
     eval_lgln(
-        f"{sdl_runner.runner.logdir}/epoch5/holistic_seg_result",
+        f"{sdl_runner.runner.logdir}/holistic_seg_result",
         f"{data_path}/test/label"
     )
 

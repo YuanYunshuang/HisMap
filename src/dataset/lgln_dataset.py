@@ -20,8 +20,6 @@ class LglnDataset(Dataset):
     def __init__(self,
                  cfgs,
                  mode='train',
-                 load_to_memory=False,
-                 pseudo_label=True,
     ):
         self.root_dir = cfgs['data_path']
         self.mode = mode
@@ -29,19 +27,26 @@ class LglnDataset(Dataset):
         self.crop_size = cfgs['crop_size']
         self.max_num_img = cfgs.get('max_num_img', 4)
         self.labels_info = cfgs.get('labels', None)
-        self.load_to_memory = load_to_memory
-        self.pseudo_label = pseudo_label
+        self.load_to_memory = cfgs.get('load_to_memory', False)
+        # pseudo_label = true: gradually fine-tune with pseudo labels by age-tracing
+        # pseudo_label = false: train on all images across all ages at once, using label only from one year
+        self.pseudo_label = cfgs.get('pseudo_label', True)
         self.reparse_pseudo_label = cfgs.get('reparse_pseudo_label', False)
+        # whether to use atkis label from year 2023,
+        # if set false, the manual label from 1974-1975 will be used
         self.atkis_label = cfgs.get('atkis_label', False)
 
         self.init_paths()
         self.parse_meta(cfgs)
-        if load_to_memory or self.mode == 'test':
+        if self.load_to_memory or self.mode == 'test':
             self.load_maps()
             self.load_labels()
         else:
             self.parse_maps()
             self.parse_labels()
+
+        if self.labels_info is None:
+            self.update_label_info()
 
         self.train_pipeline = Pipeline(cfgs['train_pipeline'])
         self.test_pipeline = Pipeline(cfgs['test_pipeline'])
@@ -49,7 +54,7 @@ class LglnDataset(Dataset):
     def init_paths(self):
         self.map_dir = os.path.join(self.root_dir, self.mode, 'maps')
         self.img_dir = os.path.join(self.root_dir, self.mode, 'imgs')
-        if self.atkis_label:
+        if self.atkis_label and self.mode == 'train':
             self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt2023')
             self.label_dir = os.path.join(self.root_dir, self.mode, 'label2023')
         else:
@@ -217,6 +222,17 @@ class LglnDataset(Dataset):
                     self.labels[k]['years'].append(y)
             self.labels[k]['years'] = sorted(self.labels[k]['years'])
 
+    def update_label_info(self):
+        files = os.listdir(self.pseudo_label_dir)
+        self.labels_info = {}
+        for f in files:
+            patch, year, x, y = f.split('.')[0].split('_')
+            patch, year = int(patch), int(year)
+            if patch not in self.labels_info:
+                self.labels_info[patch] = []
+            if year not in self.labels_info[patch]:
+                self.labels_info[patch].append(year)
+
     def cfgs_to_pseudo_label_mode(self):
         self.original_config = {
             'mode': self.mode,
@@ -289,6 +305,8 @@ class LglnDataset(Dataset):
 
 
     def get_label(self, patch, year, x, y):
+        if not self.pseudo_label:
+            year = self.labels_info[patch][0]
         if patch in self.labels and 'data' in self.labels[patch] and year in self.labels[patch]['years']:
             idx = self.labels[patch]['years'].index(year)
             label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
@@ -302,6 +320,7 @@ class LglnDataset(Dataset):
                 label = cv2.imread(file, cv2.IMREAD_UNCHANGED)
             else:
                 label = None
+
 
         return label
 
@@ -363,65 +382,6 @@ class LglnDataset(Dataset):
 
         return data_dict
 
-
-class Lgln2023Dataset(LglnDataset):
-    def init_paths(self):
-        self.map_dir = os.path.join(self.root_dir, self.mode, 'maps')
-        self.img_dir = os.path.join(self.root_dir, self.mode, 'imgs')
-        self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt2023')
-        self.label_dir = os.path.join(self.root_dir, self.mode, 'label2023')
-
-    def load_labels(self, meta_only=False):
-        labels = {}
-        print("\nLoading labels ...")
-        for x in tqdm.tqdm(sorted(os.listdir(self.label_dir))):
-            patch, year = x.split('.')[0].split('_')
-            patch, year = int(patch), int(year)
-            if patch == 3821 and year == 2023:
-                year = 2016
-            elif patch == 3822 and year == 2023:
-                year = 2016
-            elif patch == 3921 and year == 2023:
-                year = 2017
-            if patch not in labels:
-                if meta_only:
-                    labels[patch] = {'years': [], 'size': []}
-                else:
-                    labels[patch] = {'years': [], 'size': [], 'data': []}
-            if year in self.years:
-                cur_label = cv2.imread(os.path.join(self.label_dir, x), cv2.IMREAD_UNCHANGED) / 50
-                if not meta_only:
-                    labels[patch]['data'].append(cur_label.astype(np.int8))
-                labels[patch]['years'].append(year)
-                labels[patch]['size'].append(cur_label.shape)
-        self.labels = labels
-
-    def parse_labels(self):
-        self.pseudo_label_dir = os.path.join(self.root_dir, self.mode, 'pseudo_label2023')
-        os.makedirs(self.pseudo_label_dir, exist_ok=True)
-        if self.reparse_pseudo_label:
-            self.load_labels()
-            for info in self.samples:
-                patch, year, x, y = info
-                if year not in self.labels[patch]['years']:
-                    continue
-                idx = self.labels[patch]['years'].index(year)
-                label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
-                label = np.pad(label,
-                               ((0, max(self.crop_size - label.shape[0], 0)),
-                                (0, max(self.crop_size - label.shape[1], 0)),
-                                ), mode='constant', constant_values=0)
-                filename = f"{patch}_{year}_{x}_{y}.png"
-                cv2.imwrite(os.path.join(self.pseudo_label_dir, filename), label)
-            for k, v in self.labels.items():
-                v.pop('data')
-        else:
-            self.load_labels(meta_only=True)
-        for k, v in self.meta.items():
-            for y in v:
-                if y in self.years and y not in self.labels[k]['years']:
-                    self.labels[k]['years'].append(y)
-            self.labels[k]['years'] = sorted(self.labels[k]['years'])
 
 
 class LglnSeqDataset(Dataset):

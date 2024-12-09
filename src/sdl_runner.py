@@ -71,6 +71,7 @@ if __name__ == "__main__":
     parser.add_argument("--year-range", type=str)
     parser.add_argument("--years", type=str)
     parser.add_argument("--crop-size", type=int)
+    parser.add_argument("--reparse-pseudo-label", action="store_true")
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -102,6 +103,8 @@ if __name__ == "__main__":
         cfgs['DATASET']['crop_size'] = args.crop_size
         if args.mode == "test":
             cfgs['DATASET']['crop_step_size'] = args.crop_size
+    if args.reparse_pseudo_label:
+        cfgs['DATASET']['reparse_pseudo_label'] = args.reparse_pseudo_label
 
     sdl_runner = SupervisedRunner(args, cfgs)
     if args.mode == "train":

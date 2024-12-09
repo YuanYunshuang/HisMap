@@ -60,6 +60,9 @@ class LglnDataset(Dataset):
         else:
             self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt')
             self.label_dir = os.path.join(self.root_dir, self.mode, 'label')
+        dirname = 'pseudo_label2023' if self.atkis_label else 'pseudo_label'
+        self.pseudo_label_dir = os.path.join(self.root_dir, self.mode, dirname)
+        os.makedirs(self.pseudo_label_dir, exist_ok=True)
 
     def parse_meta(self, cfgs):
         self.meta = {}
@@ -195,9 +198,6 @@ class LglnDataset(Dataset):
         self.labels = labels
 
     def parse_labels(self):
-        dirname = 'pseudo_label2023' if self.atkis_label else 'pseudo_label'
-        self.pseudo_label_dir = os.path.join(self.root_dir, self.mode, dirname)
-        os.makedirs(self.pseudo_label_dir, exist_ok=True)
         if self.reparse_pseudo_label:
             self.load_labels()
             for info in self.samples:

@@ -101,6 +101,9 @@ def crop_sample_map(path):
     cv2.imwrite(os.path.join(path.replace('maps', 'ica2025'), "3821_2016.jpg"), map2016[x:x+sz, y:y+sz, ::-1])
 
 
+def crop_pseudo_label(in_path, out_path):
+    pass
+
 
 if __name__ == '__main__':
     path = "/home/yuan/data/HisMap/LGLN/dataset/train/maps"

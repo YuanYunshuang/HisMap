@@ -253,22 +253,26 @@ class LglnDataset(Dataset):
         self.maps = {}
         self.samples = []
         print("Loading maps for generating pseudo labels ...")
-        for k, v in self.labels.items():
-            start_year = min(self.labels_info[k])
-            end_year = max(self.labels_info[k])
-            start_idx = self.meta[k].index(start_year) - 1
-            end_idx = self.meta[k].index(end_year) + 1
-            pseudo_labels[k] = {'years': [], 'data': []}
+        if self.atkis_label:
+            has_new_labels = True
+            for k, v in self.labels.items():
+                pseudo_labels[k] = {'years': self.labels_info[k], 'data': [np.zeros(v['size'][0], dtype=np.int8)]}
+        else:
+            for k, v in self.labels.items():
+                start_year = min(self.labels_info[k])
+                end_year = max(self.labels_info[k])
+                start_idx = self.meta[k].index(start_year) - 1
+                end_idx = self.meta[k].index(end_year) + 1
+                pseudo_labels[k] = {'years': [], 'data': []}
 
-            if start_idx >= 0:
-                pseudo_labels[k]['years'].append(self.meta[k][start_idx])
-                pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                has_new_labels = True
-            if end_idx < len(self.meta[k]):
-                pseudo_labels[k]['years'].append(self.meta[k][end_idx])
-                pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                has_new_labels = True
-
+                if start_idx >= 0:
+                    pseudo_labels[k]['years'].append(self.meta[k][start_idx])
+                    pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                    has_new_labels = True
+                if end_idx < len(self.meta[k]):
+                    pseudo_labels[k]['years'].append(self.meta[k][end_idx])
+                    pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                    has_new_labels = True
         # load maps for pseudo labels
         if has_new_labels:
             for k, v in pseudo_labels.items():

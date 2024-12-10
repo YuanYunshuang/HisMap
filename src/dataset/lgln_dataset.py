@@ -253,10 +253,10 @@ class LglnDataset(Dataset):
         self.maps = {}
         self.samples = []
         print("Loading maps for generating pseudo labels ...")
-        if self.atkis_label:
+        if self.atkis_label and not self.pseudo_label:
             has_new_labels = True
             for k, v in self.labels.items():
-                pseudo_labels[k] = {'years': self.labels_info[k], 'data': [np.zeros(v['size'][0], dtype=np.int8)]}
+                pseudo_labels[k] = {'years': self.labels_info[k], 'data': []}
         else:
             for k, v in self.labels.items():
                 start_year = min(self.labels_info[k])
@@ -267,11 +267,11 @@ class LglnDataset(Dataset):
 
                 if start_idx >= 0:
                     pseudo_labels[k]['years'].append(self.meta[k][start_idx])
-                    pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                    # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
                     has_new_labels = True
                 if end_idx < len(self.meta[k]):
                     pseudo_labels[k]['years'].append(self.meta[k][end_idx])
-                    pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                    # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
                     has_new_labels = True
         # load maps for pseudo labels
         if has_new_labels:
@@ -282,6 +282,7 @@ class LglnDataset(Dataset):
                     self.maps[k]['years'].append(year)
                     self.maps[k]['size'].append(TIF.shape)
                     self.maps[k]['data'].append(TIF)
+                    v['data'].append(np.zeros(TIF.shape[:2], dtype=np.int8))
                     map_size = TIF.shape
                     x = np.arange(0, map_size[0], self.crop_size)
                     y = np.arange(0, map_size[1], self.crop_size)

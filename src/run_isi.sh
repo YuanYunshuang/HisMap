@@ -1,16 +1,12 @@
-PYTHONPATH=. python src/run_lgln.py --mode train \
- --config src/config/lgln/seg5cls_focal.yaml \
- --load-from /home/yuan/data/out/LGLN/lgln-1973-1975/epoch20.pth  \
- --log-dir /home/yuan/data/out/LGLN --unc-thr 0.3
+#!/bin/bash
 
- PYTHONPATH=. python src/run_lgln.py --mode train \
- --config src/config/lgln/seg5cls_focal.yaml \
- --load-from /home/yuan/data/out/LGLN/lgln-1973-1975/epoch20.pth  \
- --log-dir /home/yuan/data/out/LGLN --unc-thr 0.2
+for i in {5..1}
+do
+PYTHONPATH=. python src/run_lgln_2023.py --mode train \
+ --config src/config/lgln/seg5cls_focal_2023.yaml \
+--load-from /home/yuan/data/out/LGLN2023/2023/epoch20.pth \
+ --log-dir /home/yuan/data/out/LGLN2023 --unc-thr 0."$i"
 
-  PYTHONPATH=. python src/run_lgln.py --mode train \
- --config src/config/lgln/seg5cls_focal.yaml \
- --load-from /home/yuan/data/out/LGLN/lgln-1973-1975/epoch20.pth  \
- --log-dir /home/yuan/data/out/LGLN --unc-thr 0.1
+done
 
 

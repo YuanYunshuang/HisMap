@@ -17,6 +17,7 @@ colors = {
 
 german2english = {'Wald': 'Woodland', 'Grünland': 'Woodland', 'Siedlung': 'Settlement', 'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater'}
 LGLN_CLS=['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
+LGLN_COLOR = [[85, 166, 48], [221, 223, 0], [176, 137, 104], [144, 224, 239], [3, 4, 255]]
 
 def label_to_rgb(in_file, out_file, color, down_sample=2):
     flow_water = read_tiff(in_file)

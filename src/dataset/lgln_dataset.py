@@ -53,7 +53,7 @@ class LglnDataset(Dataset):
     def init_paths(self):
         self.map_dir = os.path.join(self.root_dir, self.mode, 'maps')
         self.img_dir = os.path.join(self.root_dir, self.mode, 'imgs')
-        if self.cfgs['start_year'] == 2023:
+        if self.cfgs['start_year'] == 2023 and self.mode == 'train':
             self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt2023')
             self.label_dir = os.path.join(self.root_dir, self.mode, 'label2023')
             dirname = 'pseudo_label2023'
@@ -70,6 +70,8 @@ class LglnDataset(Dataset):
         for x in sorted(os.listdir(self.map_dir)):
             patch, year = x.split('.')[0].split('_')
             patch, year = int(patch), int(year)
+            if self.train_mode == 'trace' and year == 2023:
+                continue
             if patch not in self.meta:
                 self.meta[patch] = []
             years.append(year)
@@ -131,16 +133,22 @@ class LglnDataset(Dataset):
                     self.samples.extend(np.concatenate([np.zeros_like(xy[:, :1]) + patch,
                                                         np.zeros_like(xy[:, :1]) + year, xy], axis=-1))
         else:
+            samples = []
             for x in os.listdir(self.img_dir):
                 patch, year, x, y = x.split('.')[0].split('_')
                 patch, year, x, y = int(patch), int(year), int(x), int(y)
-                if self.train_mode == "all":
-                    self.samples.append([patch, year, x, y])
-                elif self.labels_info is not None:
-                    if year in self.labels_info[patch]:
-                        self.samples.append([patch, year, x, y])
-                elif int(year) in self.years:
-                    self.samples.append([patch, year, x, y])
+                samples.append([patch, year, x, y])
+            if self.train_mode == 'trace':
+                self.traced_ages = self.trace_ages(mix_old=True)
+                for s in samples:
+                    if s[1] in self.traced_ages[s[0]]['years']:
+                        self.samples.append(s)
+            elif self.train_mode == "all":
+                self.samples = samples
+            elif self.train_mode == "pre":
+                self.samples = [s for s in samples if s[1] in self.years]
+            else:
+                raise NotImplementedError
             # self.samples = self.samples[:16*20]
         print(f"Found {len(self.samples)} image samples.")
 
@@ -245,28 +253,37 @@ class LglnDataset(Dataset):
         self.crop_size = 1024
         self.crop_step_size = 1024
 
+    def trace_ages(self, mix_old=False):
+        traced_ages = {}
+        for k, v in self.labels_info.items():
+            start_year = min(v)
+            end_year = max(v)
+            start_idx = self.meta[k].index(start_year) - 1
+            end_idx = self.meta[k].index(end_year) + 1
+            traced_ages[k] = {'years': [], 'label_years': []}
+
+            if start_idx >= 0:
+                traced_ages[k]['years'].append(self.meta[k][start_idx])
+                traced_ages[k]['label_years'].append(start_year)
+            if end_idx < len(self.meta[k]):
+                traced_ages[k]['years'].append(self.meta[k][end_idx])
+                traced_ages[k]['label_years'].append(end_year)
+            if mix_old:
+                traced_ages[k]['years'].extend(v)
+                traced_ages[k]['label_years'].extend(v)
+        return traced_ages
+
     def pre_update_pseudo_labels(self, step=1):
         self.cfgs_to_pseudo_label_mode()
         pseudo_labels = {}
         has_new_labels = False
         self.maps = {}
         self.samples = []
+        traced_ages = self.trace_ages()
 
-        for k, v in self.labels.items():
-            start_year = min(self.labels_info[k])
-            end_year = max(self.labels_info[k])
-            start_idx = self.meta[k].index(start_year) - 1
-            end_idx = self.meta[k].index(end_year) + 1
-            pseudo_labels[k] = {'years': [], 'data': []}
-
-            if start_idx >= 0:
-                pseudo_labels[k]['years'].append(self.meta[k][start_idx])
-                # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                has_new_labels = True
-            if end_idx < len(self.meta[k]):
-                pseudo_labels[k]['years'].append(self.meta[k][end_idx])
-                # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                has_new_labels = True
+        for k, v in traced_ages.items():
+            pseudo_labels[k] = {'years': v['years'], 'data': []}
+            has_new_labels = True
         # load maps for pseudo labels
         if has_new_labels:
             print("Loading maps for generating pseudo labels ...")
@@ -299,13 +316,15 @@ class LglnDataset(Dataset):
                     label = v['data'][i][xy[0]:xy[0]+self.crop_size, xy[1]:xy[1]+self.crop_size]
                     filename = os.path.join(self.pseudo_label_dir, f"{k}_{year}_{xy[0]}_{xy[1]}.png")
                     cv2.imwrite(filename, label)
-                self.labels[k]['years'].append(year)
-                self.labels[k]['size'].append(self.labels[k]['size'][0])
+                # self.labels[k]['years'].append(year)
+                # self.labels[k]['size'].append(self.labels[k]['size'][0])
                 # self.labels_info[k].append(year)
 
     def get_label(self, patch, year, x, y):
         if self.train_mode == 'all':
             year = self.labels_info[patch][0]
+        elif self.train_mode == 'trace':
+            year = self.traced_ages[patch]['label_years'][self.traced_ages[patch]['years'].index(year)]
         if patch in self.labels and 'data' in self.labels[patch] and year in self.labels[patch]['years']:
             idx = self.labels[patch]['years'].index(year)
             label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]

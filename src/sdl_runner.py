@@ -72,6 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--years", type=str)
     parser.add_argument("--crop-size", type=int)
     parser.add_argument("--reparse-pseudo-label", action="store_true")
+    parser.add_argument("--log-to-tensorboard", action="store_true")
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -105,6 +106,8 @@ if __name__ == "__main__":
             cfgs['DATASET']['crop_step_size'] = args.crop_size
     if args.reparse_pseudo_label:
         cfgs['DATASET']['reparse_pseudo_label'] = args.reparse_pseudo_label
+    if args.log_to_tensorboard:
+        cfgs['TRAIN']['hooks'].append(dict(type="LGLNSegPlotWriterHook", max_n_img=2, log_every=100))
 
     sdl_runner = SupervisedRunner(args, cfgs)
     if args.mode == "train":

@@ -48,6 +48,12 @@ class BaseHook:
     def post_epoch(self, runner, **kwargs):
         pass
 
+    def pre_train(self, runner, **kwargs):
+        pass
+
+    def post_train(self, runner, **kwargs):
+        pass
+
     def set_logger(self, logger):
         self.logger = logger
 
@@ -417,33 +423,32 @@ class LGLNPseudoLabelHook(BaseHook):
     def set_logger(self, logger):
         pass
 
-    def post_epoch(self, runner, **kwargs):
-        if runner.epoch == runner.total_epochs:
-            dataset = runner.dataloader.dataset
-            pseudo_labels, has_new_labels = dataset.pre_update_pseudo_labels()
-            if has_new_labels:
-                runner.model.eval()
-                print("Generating pseudo labels for:")
-                for k, v in pseudo_labels.items():
-                    print(f"{k}: {', '.join([str(x) for x in v['years']])}")
-                with torch.no_grad():
-                    for data in tqdm.tqdm(dataset, total=len(dataset)):
-                        data = dataset.collate_batch([data])
-                        load_tensors_to_gpu(data, runner.gpu_id)
-                        data = runner.model.forward(data, epoch=runner.epoch, itr=runner.iter, gpu_id=runner.gpu_id)
-                        patch, x, y, year = data['patch'][0], data['x'][0], data['y'][0], data['data_years'][0][0]
-                        conf_img = data['conf_img'].squeeze()
-                        max_conf, plabel = conf_img.max(-1)
-                        # ignore = (max_conf < self.pos) & (max_conf > self.neg)
-                        ignore = data['unc_img'].squeeze() > self.unc
-                        plabel[ignore] = -1
-                        idx = pseudo_labels[patch]['years'].index(year)
-                        sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape
-                        pseudo_labels[patch]['data'][idx][x:x+dataset.crop_size, y:y+dataset.crop_size] = \
-                            plabel.cpu().numpy()[:sz[0], :sz[1]].astype(np.int8)
+    def post_train(self, runner, **kwargs):
+        dataset = runner.dataloader.dataset
+        pseudo_labels, has_new_labels = dataset.pre_update_pseudo_labels()
+        if has_new_labels:
+            runner.model.eval()
+            print("Generating pseudo labels for:")
+            for k, v in pseudo_labels.items():
+                print(f"{k}: {', '.join([str(x) for x in v['years']])}")
+            with torch.no_grad():
+                for data in tqdm.tqdm(dataset, total=len(dataset)):
+                    data = dataset.collate_batch([data])
+                    load_tensors_to_gpu(data, runner.gpu_id)
+                    data = runner.model.forward(data, epoch=runner.epoch, itr=runner.iter, gpu_id=runner.gpu_id)
+                    patch, x, y, year = data['patch'][0], data['x'][0], data['y'][0], data['data_years'][0][0]
+                    conf_img = data['conf_img'].squeeze()
+                    max_conf, plabel = conf_img.max(-1)
+                    # ignore = (max_conf < self.pos) & (max_conf > self.neg)
+                    ignore = data['unc_img'].squeeze() > self.unc
+                    plabel[ignore] = -1
+                    idx = pseudo_labels[patch]['years'].index(year)
+                    sz = pseudo_labels[patch]['data'][idx][x:x + dataset.crop_size, y:y + dataset.crop_size].shape
+                    pseudo_labels[patch]['data'][idx][x:x+dataset.crop_size, y:y+dataset.crop_size] = \
+                        plabel.cpu().numpy()[:sz[0], :sz[1]].astype(np.int8)
 
-                # cv2.imwrite("/home/yuan/Downloads/tmp.jpg", pseudo_labels[patch]['data'][0].astype(np.uint8) * 50)
-                dataset.post_update_pseudo_labels(pseudo_labels)
+            # cv2.imwrite("/home/yuan/Downloads/tmp.jpg", pseudo_labels[patch]['data'][0].astype(np.uint8) * 50)
+            dataset.post_update_pseudo_labels(pseudo_labels)
 
 
 

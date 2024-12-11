@@ -16,11 +16,12 @@ from src.tools.map_analyzer import read_tiff
 
 
 class LglnDataset(Dataset):
-    CLASSES = ['FlowingWater', 'Grassland', 'Settlement', 'StandingWater', 'Woodland']
+    CLASSES = ['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
     def __init__(self,
                  cfgs,
                  mode='train',
     ):
+        self.cfgs = cfgs
         self.root_dir = cfgs['data_path']
         self.mode = mode
         self.crop_step_size = cfgs['crop_step_size']
@@ -28,13 +29,11 @@ class LglnDataset(Dataset):
         self.max_num_img = cfgs.get('max_num_img', 4)
         self.labels_info = cfgs.get('labels', None)
         self.load_to_memory = cfgs.get('load_to_memory', False)
-        # pseudo_label = true: gradually fine-tune with pseudo labels by age-tracing
-        # pseudo_label = false: train on all images across all ages at once, using label only from one year
-        self.pseudo_label = cfgs.get('pseudo_label', True)
+        # finetune: gradually fine-tune with pseudo labels by age-tracing
+        # all: train on all images across all ages at once, using label only from one year
+        # pre: pre-train on the images that have ground truth labels
+        self.train_mode = cfgs.get('train_mode', 'pre')
         self.reparse_pseudo_label = cfgs.get('reparse_pseudo_label', False)
-        # whether to use atkis label from year 2023,
-        # if set false, the manual label from 1974-1975 will be used
-        self.atkis_label = cfgs.get('atkis_label', False)
 
         self.init_paths()
         self.parse_meta(cfgs)
@@ -54,13 +53,14 @@ class LglnDataset(Dataset):
     def init_paths(self):
         self.map_dir = os.path.join(self.root_dir, self.mode, 'maps')
         self.img_dir = os.path.join(self.root_dir, self.mode, 'imgs')
-        if self.atkis_label and self.mode == 'train':
+        if self.cfgs['start_year'] == 2023:
             self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt2023')
             self.label_dir = os.path.join(self.root_dir, self.mode, 'label2023')
+            dirname = 'pseudo_label2023'
         else:
             self.gt_dir = os.path.join(self.root_dir, self.mode, 'gt')
             self.label_dir = os.path.join(self.root_dir, self.mode, 'label')
-        dirname = 'pseudo_label2023' if self.atkis_label else 'pseudo_label'
+            dirname = 'pseudo_label'
         self.pseudo_label_dir = os.path.join(self.root_dir, self.mode, dirname)
         os.makedirs(self.pseudo_label_dir, exist_ok=True)
 
@@ -134,7 +134,9 @@ class LglnDataset(Dataset):
             for x in os.listdir(self.img_dir):
                 patch, year, x, y = x.split('.')[0].split('_')
                 patch, year, x, y = int(patch), int(year), int(x), int(y)
-                if self.labels_info is not None:
+                if self.train_mode == "all":
+                    self.samples.append([patch, year, x, y])
+                elif self.labels_info is not None:
                     if year in self.labels_info[patch]:
                         self.samples.append([patch, year, x, y])
                 elif int(year) in self.years:
@@ -181,8 +183,6 @@ class LglnDataset(Dataset):
         for x in tqdm.tqdm(sorted(os.listdir(self.label_dir))):
             patch, year = x.split('.')[0].split('_')
             patch, year = int(patch), int(year)
-            if self.atkis_label and year == 2023:
-                year = 2017 if patch == 3921 else 2016
 
             if patch not in labels:
                 if meta_only:
@@ -245,36 +245,31 @@ class LglnDataset(Dataset):
         self.crop_size = 1024
         self.crop_step_size = 1024
 
-
     def pre_update_pseudo_labels(self, step=1):
         self.cfgs_to_pseudo_label_mode()
         pseudo_labels = {}
         has_new_labels = False
         self.maps = {}
         self.samples = []
-        print("Loading maps for generating pseudo labels ...")
-        if self.atkis_label and not self.pseudo_label:
-            has_new_labels = True
-            for k, v in self.labels.items():
-                pseudo_labels[k] = {'years': self.labels_info[k], 'data': []}
-        else:
-            for k, v in self.labels.items():
-                start_year = min(self.labels_info[k])
-                end_year = max(self.labels_info[k])
-                start_idx = self.meta[k].index(start_year) - 1
-                end_idx = self.meta[k].index(end_year) + 1
-                pseudo_labels[k] = {'years': [], 'data': []}
 
-                if start_idx >= 0:
-                    pseudo_labels[k]['years'].append(self.meta[k][start_idx])
-                    # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                    has_new_labels = True
-                if end_idx < len(self.meta[k]):
-                    pseudo_labels[k]['years'].append(self.meta[k][end_idx])
-                    # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
-                    has_new_labels = True
+        for k, v in self.labels.items():
+            start_year = min(self.labels_info[k])
+            end_year = max(self.labels_info[k])
+            start_idx = self.meta[k].index(start_year) - 1
+            end_idx = self.meta[k].index(end_year) + 1
+            pseudo_labels[k] = {'years': [], 'data': []}
+
+            if start_idx >= 0:
+                pseudo_labels[k]['years'].append(self.meta[k][start_idx])
+                # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                has_new_labels = True
+            if end_idx < len(self.meta[k]):
+                pseudo_labels[k]['years'].append(self.meta[k][end_idx])
+                # pseudo_labels[k]['data'].append(np.zeros(v['size'][0], dtype=np.int8))
+                has_new_labels = True
         # load maps for pseudo labels
         if has_new_labels:
+            print("Loading maps for generating pseudo labels ...")
             for k, v in pseudo_labels.items():
                 self.maps[k] = {'years': [], 'size': [], 'data': []}
                 for year in v['years']:
@@ -308,9 +303,8 @@ class LglnDataset(Dataset):
                 self.labels[k]['size'].append(self.labels[k]['size'][0])
                 # self.labels_info[k].append(year)
 
-
     def get_label(self, patch, year, x, y):
-        if not self.pseudo_label:
+        if self.train_mode == 'all':
             year = self.labels_info[patch][0]
         if patch in self.labels and 'data' in self.labels[patch] and year in self.labels[patch]['years']:
             idx = self.labels[patch]['years'].index(year)

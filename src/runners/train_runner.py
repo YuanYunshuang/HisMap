@@ -100,6 +100,7 @@ class TrainRunner(BaseRunner):
 
     def run(self):
         with torch.autograd.set_detect_anomaly(True):
+            self.hooks(self, 'pre_train')
             for i in range(self.start_epoch, self.total_epochs + 1):
                 self.hooks(self, 'pre_epoch')
                 self.run_epoch()
@@ -109,6 +110,7 @@ class TrainRunner(BaseRunner):
                 self.lr_scheduler.step_epoch(i)
                 self.epoch += 1
                 self.iter = 1
+            self.hooks(self, 'post_train')
 
     def step(self):
         data = self.next_batch()

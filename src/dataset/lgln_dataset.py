@@ -331,9 +331,9 @@ class LglnDataset(Dataset):
                 # self.labels_info[k].append(year)
 
     def get_label(self, patch, year, x, y):
-        if self.train_mode == 'all':
+        if self.mode == 'train' and self.train_mode == 'all':
             year = self.labels_info[patch][0]
-        elif self.train_mode == 'trace':
+        elif self.mode == 'train' and self.train_mode == 'trace':
             year = self.traced_ages[patch]['label_years'][self.traced_ages[patch]['years'].index(year)]
         if patch in self.labels and 'data' in self.labels[patch] and year in self.labels[patch]['years']:
             idx = self.labels[patch]['years'].index(year)

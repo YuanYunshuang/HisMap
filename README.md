@@ -20,8 +20,62 @@
   - __[PatchID]\_[Year]\_[Class].tif__ (label maps from year 1898 to 1996 of patch 3922)
 
 ## Experiment
-### E1: train with maps and label from patch 3821, 3822, 3921 and year 1898-2000
-- train 
-  - config file : `seg5cls_focal.yaml`
+### E1(All): train with maps and label from patch 3821, 3822, 3921 and all ages
+- train config file : 
+    ```yaml
+    DATASET:
+      # ...
+      start_year: 2023 # or 1973
+      end_year: 2023 # or 1975
+      train_mode: all
+    TRAIN:
+      # ...
+      max_epoch: 20
+      optimizer:
+        lr: 0.0002
+        # ...
+      lr_scheduler:
+        milestones: [10, 15]
+        # ...
+    ```
+  
+### E2(Pre): pre-train with maps and label from patch 3821, 3822, 3921 and the anchor years (1973-1975 or 2023)
+- train config file : 
+    ```yaml
+    DATASET:
+      # ...
+      start_year: 2023 # or 1973
+      end_year: 2023 # or 1975
+      train_mode: pre
+    TRAIN:
+      # ...
+      max_epoch: 20
+      optimizer:
+        lr: 0.0002
+        # ...
+      lr_scheduler:
+        milestones: [10, 15]
+        # ...
+    ```
+
+### E2(Trace): Fine-tuning the pre-trained model.
+- train config file : 
+    ```yaml
+    DATASET:
+      # ...
+      start_year: 2023 # or 1973
+      end_year: 2023 # or 1975
+      train_mode: trace
+    TRAIN:
+      # ...
+      max_epoch: 3
+      optimizer:
+        lr: 0.00002
+        # ...
+      lr_scheduler:
+        milestones: [3]
+        # ...
+    ```
+  
 - test
   - patch 3922 in year 1898, 1974, 1982, 1996.

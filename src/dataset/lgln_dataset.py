@@ -1,6 +1,7 @@
 import copy
 import os
 from fileinput import filename
+from random import random
 
 import tqdm
 
@@ -142,7 +143,10 @@ class LglnDataset(Dataset):
                 self.traced_ages = self.trace_ages(mix_old=True)
                 for s in samples:
                     if s[1] in self.traced_ages[s[0]]['years']:
-                        self.samples.append(s)
+                        idx = self.traced_ages[s[0]]['years'].index(s[1])
+                        sampling_ratio = self.traced_ages[s[0]]['sampling_ratio'][idx]
+                        if random() < sampling_ratio:
+                            self.samples.append(s)
             elif self.train_mode == "all":
                 self.samples = samples
             elif self.train_mode == "pre":
@@ -260,17 +264,23 @@ class LglnDataset(Dataset):
             end_year = max(v)
             start_idx = self.meta[k].index(start_year) - 1
             end_idx = self.meta[k].index(end_year) + 1
-            traced_ages[k] = {'years': [], 'label_years': []}
+            traced_ages[k] = {'years': [], 'label_years': [], 'sampling_ratio': []}
+            sampling_ratio = [0.5, ] * len(v)
 
             if start_idx >= 0:
                 traced_ages[k]['years'].append(self.meta[k][start_idx])
                 traced_ages[k]['label_years'].append(start_year)
+                traced_ages[k]['sampling_ratio'].append(1.0)
+                sampling_ratio[v.index(start_year)] = 1.0
             if end_idx < len(self.meta[k]):
                 traced_ages[k]['years'].append(self.meta[k][end_idx])
                 traced_ages[k]['label_years'].append(end_year)
+                traced_ages[k]['sampling_ratio'].append(1.0)
+                sampling_ratio[v.index(end_year)] = 1.0
             if mix_old:
                 traced_ages[k]['years'].extend(v)
                 traced_ages[k]['label_years'].extend(v)
+                traced_ages[k]['sampling_ratio'].extend(sampling_ratio)
         return traced_ages
 
     def pre_update_pseudo_labels(self, step=1):

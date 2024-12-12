@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from glob import glob
 
-from src.tools.map_analyzer import read_tiff
+from src.tools.lgln import LGLN_COLOR
 
 
 def iou_and_acc(pred, gt):
@@ -77,12 +77,21 @@ def eval_lgln(res_dir, gt_dir):
     with open(os.path.join(os.path.dirname(res_dir), 'eval.txt'), 'w') as f:
         f.write(ss)
 
+def convert_label_to_rgb(filename):
+    label = cv2.imread(filename, cv2.IMREAD_UNCHANGED) / 50
+    img = np.zeros((label.shape[0], label.shape[1], 3), dtype=np.uint8)
+    for i in range(5):
+        mask = label == i + 1
+        img[mask] = LGLN_COLOR[i]
+    cv2.imwrite(filename.replace('png', 'jpg'), img[::4, ::4, ::-1])
+
 
 
 if __name__ == '__main__':
-    eval_lgln(
-        "/home/yuan/data/out/LGLN/pseudo-0.7/pseudo_12-07-04-58-57/epoch5/holistic_seg_result",
-        "/home/yuan/data/HisMap/LGLN/dataset/test/label"
-    )
+    convert_label_to_rgb("/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result/3821_2023.png")
+    # eval_lgln(
+    #     "/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result",
+    #     "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    # )
 
 

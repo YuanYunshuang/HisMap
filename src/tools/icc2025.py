@@ -76,13 +76,14 @@ def summarize_result(path):
     return res
 
 def plot(res, save_dir):
+    plt.rcParams.update({'font.size': 14})
     labels = ['WL', 'GL', 'SM', 'FL', 'SW', 'mIoU', 'OA']
-
-    for year, v in res.items():
-        fig = plt.figure(figsize=(5, 5))
-        ax = fig.add_subplot(111)
-        v = np.array(v)
-        for i, label in enumerate(labels):
+    fig = plt.figure(figsize=(20, 5))
+    axs = fig.subplots(1, 4)
+    years = sorted(res.keys())
+    for i, year in enumerate(years):
+        v = np.array(res[year])
+        for j, label in enumerate(labels):
             if label == 'mIoU' or label == 'OA':
                 alpha = 1
                 linewidth = 4
@@ -92,11 +93,15 @@ def plot(res, save_dir):
                 linewidth = 2
                 linestyle = '--'
 
-            ax.plot(v[:, 0], v[:, i+1], label=label, alpha=alpha, linewidth=linewidth, linestyle=linestyle)
+            axs[i].plot(v[:, 0], v[:, j+1], label=label, alpha=alpha, linewidth=linewidth, linestyle=linestyle)
+        axs[i].set_title(year, fontsize=14)
+        axs[i].set_xlabel('Uncertainty')
 
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f'bi_pseudo_unc_{year}.pdf'))
+    axs[0].set_ylabel("IoU / mIoU / OA in %")
+    handles, labels = axs[1].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', ncol=7, frameon=False)
+    # plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f'bi_pseudo_unc.pdf'))
 
 
 if __name__ == '__main__':

@@ -46,6 +46,8 @@ def load_meta(data_path):
     for x in sorted(os.listdir(os.path.join(data_path, 'train', 'maps'))):
         patch, year = x.split('.')[0].split('_')
         patch, year = int(patch), int(year)
+        if year == 2023:
+            continue
         if patch not in meta:
             meta[patch] = []
         meta[patch].append(year)

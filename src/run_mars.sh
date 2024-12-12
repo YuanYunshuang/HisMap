@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in {6..9}
+for i in {4..1}
 do
  PYTHONPATH=. python src/run_lgln_2023.py --mode train \
  --config src/config/lgln/seg5cls_focal_2023.yaml \

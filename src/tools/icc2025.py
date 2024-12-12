@@ -109,5 +109,6 @@ if __name__ == '__main__':
     #                                       '**/eval.txt'), recursive=True))
     # for f in files:
     #     eval_txt_to_latex(f)
-    res = summarize_result("/home/yuan/data/out/LGLN")
-    plot(res, "/home/yuan/data/out/LGLN")
+    eval_txt_to_latex("/home/yuan/data/out/LGLN2023/pre/epoch20/eval.txt")
+    # res = summarize_result("/home/yuan/data/out/LGLN")
+    # plot(res, "/home/yuan/data/out/LGLN")

@@ -88,10 +88,10 @@ def convert_label_to_rgb(filename):
 
 
 if __name__ == '__main__':
-    convert_label_to_rgb("/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result/3821_2023.png")
-    # eval_lgln(
-    #     "/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result",
-    #     "/home/yuan/data/HisMap/LGLN/dataset/test/label"
-    # )
+    # convert_label_to_rgb("/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result/3821_2023.png")
+    eval_lgln(
+        "/home/yuan/data/out/LGLN2023/all/epoch20/holistic_seg_result",
+        "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    )
 
 

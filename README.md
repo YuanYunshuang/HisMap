@@ -38,6 +38,12 @@
         milestones: [10, 15]
         # ...
     ```
+- cmd
+  ```shell
+  PYTHONPATH=. python src/sdl_runner.py \
+  --mode train \
+  --config config/lgln/seg5cls_focal.yaml 
+  ```
   
 ### E2(Pre): pre-train with maps and label from patch 3821, 3822, 3921 and the anchor years (1973-1975 or 2023)
 - train config file : 
@@ -57,6 +63,12 @@
         milestones: [10, 15]
         # ...
     ```
+- cmd:
+  ```shell
+  PYTHONPATH=. python src/sdl_runner.py \
+  --mode train \
+  --config config/lgln/seg5cls_focal.yaml 
+  ```
 
 ### E2(Trace): Fine-tuning the pre-trained model.
 - train config file : 
@@ -76,6 +88,24 @@
         milestones: [3]
         # ...
     ```
+- cmd:
+  ```shell
+  PYTHONPATH=. python src/run_lgln.py \
+  --mode train \
+  --config config/lgln/seg5cls_focal.yaml \
+  --load-from /home/yuan/data/out/LGLN/pseudo-0.6/pseudo_12-06-03-57-17/epoch5.pth
+  ```
   
-- test
-  - patch 3922 in year 1898, 1974, 1982, 1996.
+### Test
+  - patch 3922 in year 1898, 1974, 1982, 1996 have ground-truth labels. They are used for evaluation of the model performance.
+  - cmd:
+    ```shell
+    PYTHONPATH=. python src/sdl_runner.py \
+    --mode test \
+    --config config/lgln/seg5cls_focal.yaml \
+    --batch-size 1 \
+    --crop-size 1024 \
+    --start-year 1897 \
+    --end-year 2017 \
+    --load-from /home/yuan/data/out/LGLN/pseudo-0.6/pseudo_12-06-03-57-17/epoch5.pth
+    ```

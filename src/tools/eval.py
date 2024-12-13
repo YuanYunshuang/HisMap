@@ -88,7 +88,9 @@ def convert_label_to_rgb(filename):
 
 
 if __name__ == '__main__':
-    # convert_label_to_rgb("/home/yuan/code/HisMap/logs/default_12-11-15-05-00/epoch20/holistic_seg_result/3821_2023.png")
+    files = glob("/home/yuan/data/out/LGLN/pseudo-0.6/pseudo_12-06-03-57-17/epoch5/holistic_seg_result/*.png")
+    for f in files:
+        convert_label_to_rgb(f)
     eval_lgln(
         "/home/yuan/data/out/LGLN2023/all/epoch20/holistic_seg_result",
         "/home/yuan/data/HisMap/LGLN/dataset/test/label"

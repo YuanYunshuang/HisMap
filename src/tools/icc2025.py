@@ -1,10 +1,13 @@
 import glob
 import os
 
+import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from openai import files
 from sympy.abc import alpha
+
+from src.tools.map_analyzer import read_tiff
 
 
 def parse_res(filename):
@@ -104,11 +107,39 @@ def plot(res, save_dir):
     plt.savefig(os.path.join(save_dir, f'bi_pseudo_unc.pdf'))
 
 
+def land_use_analysis(path):
+    files = glob.glob(os.path.join(path, '*.png'))
+    statistic = {}
+    for f in files:
+        name = os.path.basename(f)
+        patch, year = name.split('.')[0].split('_')
+        patch, year = int(patch), int(year)
+        if patch not in statistic:
+            statistic[patch] = {}
+        label = cv2.imread(f, cv2.IMREAD_UNCHANGED) / 50
+        statistic[patch][year] = []
+        for i in range(1, 6):
+            n_pos = (label == i).sum()
+            statistic[patch][year].append(n_pos)
+    fig = plt.figure(figsize=(5, 5))
+    axs = fig.subplots(1, 1)
+    data = statistic[3922]
+    years = sorted(data.keys())
+    for i in range(5):
+        pixels = [data[y][i] for y in years ]
+        axs.plot(years, pixels, label=f'{i+1}')
+    axs.legend()
+    plt.savefig("/home/yuan/data/out/LGLN/pseudo-0.6/pseudo_12-06-03-57-17/epoch5/statistic.png")
+
+
+
 if __name__ == '__main__':
+    pass
     # files = sorted(glob.glob(os.path.join("/home/yuan/data/out/LGLN",
     #                                       '**/eval.txt'), recursive=True))
     # for f in files:
     #     eval_txt_to_latex(f)
-    eval_txt_to_latex("/home/yuan/data/out/LGLN2023/pre/epoch20/eval.txt")
+    # eval_txt_to_latex("/home/yuan/data/out/LGLN2023/pre/epoch20/eval.txt")
     # res = summarize_result("/home/yuan/data/out/LGLN")
     # plot(res, "/home/yuan/data/out/LGLN")
+    land_use_analysis("/home/yuan/data/out/LGLN/pseudo-0.6/pseudo_12-06-03-57-17/epoch5/holistic_seg_result_")

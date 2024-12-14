@@ -78,4 +78,4 @@ def get_response(image_path):
 
 
 if __name__ == '__main__':
-    get_response("/home/yuan/Pictures/Screenshot 2024-11-29 14:05:15.png")
+    initialize("/home/yuan/Downloads/hismap1.png")

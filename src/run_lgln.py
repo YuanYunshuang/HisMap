@@ -71,6 +71,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-workers", type=int)
     parser.add_argument("--unc-thr", type=float, default=0.5)
     parser.add_argument("--reparse-pseudo-label", action="store_true")
+    parser.add_argument("--pseudo-label", type=bool, default=True)
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -94,6 +95,7 @@ if __name__ == "__main__":
         cfgs['DATASET']['data_path'] = args.data_path
     if args.reparse_pseudo_label:
         cfgs['DATASET']['reparse_pseudo_label'] = args.reparse_pseudo_label
+    cfgs['DATASET']['pseudo_label'] = args.pseudo_label
 
     for hook in cfgs['TRAIN']['hooks']:
         if hook['type'] == 'LGLNPseudoLabelHook':

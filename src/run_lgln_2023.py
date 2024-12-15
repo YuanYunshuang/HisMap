@@ -74,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--unc-thr", type=float, default=0.5)
     parser.add_argument("--reparse-pseudo-label", action="store_true")
     parser.add_argument("--pseudo-label", type=bool, default=True)
+    parser.add_argument("--anchor-year", type=int, default=2023)
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -110,10 +111,16 @@ if __name__ == "__main__":
     load_from = args.load_from
     meta = load_meta(data_path)
 
-    start_year = 2016
-    end_year = 2017
-    years = [x for x in range(start_year, end_year + 1)]
-    labels = {3821: [2016], 3822: [2016], 3921: [2017]}
+    if cfgs['TRAIN']['start_year'] == 2023:
+        start_year = 2016
+        end_year = 2017
+        years = [x for x in range(start_year, end_year + 1)]
+        labels = {3821: [2016], 3822: [2016], 3921: [2017]}
+    else:
+        start_year = 1973
+        end_year = 1975
+        years = [x for x in range(start_year, end_year + 1)]
+        labels = {3821: [1974], 3822: [1975], 3921: [1973]}
 
     json_file = os.path.join(exp_dir, "status.json")
     if os.path.exists(json_file):

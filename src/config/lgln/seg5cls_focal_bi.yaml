@@ -22,7 +22,7 @@ TRAIN:
   log_every: 10
   max_epoch: 3
   gpus: 0
-  hooks: 'pycfg.base.hooks.lgln_train_hooks'
+  hooks: 'pycfg.base.hooks.lgln_train_hooks_pseudo'
   optimizer:
     lr: 0.00002
     weight_decay: 1e-2

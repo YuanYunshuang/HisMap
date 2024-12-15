@@ -153,7 +153,7 @@ class LglnDataset(Dataset):
                 self.samples = [s for s in samples if s[1] in self.years]
             else:
                 raise NotImplementedError
-            # self.samples = self.samples[:16*20]
+            # self.samples = self.samples[:2*20]
         print(f"Found {len(self.samples)} image samples.")
 
     def load_gts(self):

@@ -153,7 +153,7 @@ class LglnDataset(Dataset):
                 self.samples = [s for s in samples if s[1] in self.years]
             else:
                 raise NotImplementedError
-            self.samples = self.samples[:16*20]
+            # self.samples = self.samples[:16*20]
         print(f"Found {len(self.samples)} image samples.")
 
     def load_gts(self):
@@ -214,7 +214,12 @@ class LglnDataset(Dataset):
             self.load_labels()
             for info in self.samples:
                 patch, year, x, y = info
-                if year not in self.labels[patch]['years']:
+
+                if self.mode == 'train' and self.train_mode == 'trace':
+                    year = self.traced_ages[patch]['label_years'][self.traced_ages[patch]['years'].index(year)]
+                filename = os.path.join(self.pseudo_label_dir, f"{patch}_{year}_{x}_{y}.png")
+
+                if year not in self.labels[patch]['years'] or os.path.exists(filename):
                     continue
                 idx = self.labels[patch]['years'].index(year)
                 label = self.labels[patch]['data'][idx][x:x + self.crop_size, y:y + self.crop_size]
@@ -222,8 +227,8 @@ class LglnDataset(Dataset):
                                ((0, max(self.crop_size - label.shape[0], 0)),
                                 (0, max(self.crop_size - label.shape[1], 0)),
                                 ), mode='constant', constant_values=0)
-                filename = f"{patch}_{year}_{x}_{y}.png"
-                cv2.imwrite(os.path.join(self.pseudo_label_dir, filename), label)
+
+                cv2.imwrite(filename, label)
             for k, v in self.labels.items():
                 v.pop('data')
         else:

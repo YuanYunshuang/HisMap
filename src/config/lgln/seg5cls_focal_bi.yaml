@@ -8,8 +8,8 @@ DATASET:
   gpus: 0
   crop_size: 384
   crop_step_size: 256
-  start_year: 1898
-  end_year: 2017
+  start_year: 1973
+  end_year: 1975
   train_mode: trace
 
   train_pipeline:

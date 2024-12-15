@@ -111,7 +111,7 @@ if __name__ == "__main__":
     load_from = args.load_from
     meta = load_meta(data_path)
 
-    if cfgs['TRAIN']['start_year'] == 2023:
+    if cfgs['DATASET']['start_year'] == 2023:
         start_year = 2016
         end_year = 2017
         years = [x for x in range(start_year, end_year + 1)]

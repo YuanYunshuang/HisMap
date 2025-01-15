@@ -289,7 +289,7 @@ def label_map_to_rgb(map_dir, out_dir):
         cv2.imwrite(os.path.join(out_dir, os.path.basename(mf)), rbg_img[:, :, ::-1])
 
 
-def remap_label(in_path):
+def remap_label(in_path, out_path=None):
     label_map = {
         "agr": {1: "farmland", 2: "meadow", 3: "other", 12: 'grass'},
         "for": {1: "deciduous", 2: "coniferous", 3: "mixed", 5: "woody"},
@@ -297,11 +297,13 @@ def remap_label(in_path):
         "set": {1: "urban"}
     }
     CLASSES = ['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
-    out_path = in_path.replace('gt', 'label')
+    out_path = in_path.replace('gt', 'label') if out_path is None else out_path
     files = sorted(glob(in_path + "/*.tif"))
     data = {p: {} for p in ['3821', '3822', '3921', '3922']}
     for f in files:
         patch, year, cls = os.path.basename(f).split(".")[0].split("_")
+        if patch!= '3922':
+            continue
         TIF = read_tiff(f)
         if year not in data[patch]:
             data[patch][year] = np.zeros((5,) + TIF.shape, dtype=bool)
@@ -364,8 +366,9 @@ def compare_labels():
 
 
 if __name__=="__main__":
-    compare_labels()
-    # remap_label("/home/yuan/data/HisMap/LGLN/dataset/train/gt2023")
+    # compare_labels()
+    remap_label("/home/yuan/data/HisMap/LGLN/dataset/train/gt2023",
+                "/home/yuan/data/HisMap/LGLN/dataset/3922_label_2023")
 
     # label_map_to_rgb(
     #     "/home/yuan/data/HisMap/Hameln/raster_rec",

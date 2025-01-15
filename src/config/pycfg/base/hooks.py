@@ -25,5 +25,12 @@ test_hooks = [
     dict(type='HolisticSegResultHook'),
 ]
 
+cvit_train_hooks = [
+    dict(type='MemoryUsageHook'),
+    dict(type='TrainTimerHook'),
+    dict(type="CheckPointsHook", epoch_every=10),
+]
 
-
+cvit_test_hooks = [
+    dict(type='CCVitResultHook'),
+]

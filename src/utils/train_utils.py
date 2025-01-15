@@ -25,9 +25,10 @@ def seed_everything(seed):
 def build_optimizer(model, cfg):
     # construct an optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(params,  lr=cfg['lr'],
-                                  weight_decay=cfg['weight_decay'],
-                                  betas=tuple(cfg['betas']))
+    # optimizer = torch.optim.AdamW(params,  lr=cfg['lr'],
+    #                               weight_decay=cfg['weight_decay'],
+    #                               betas=tuple(cfg['betas']))
+    optimizer = torch.optim.AdamW(params,  **cfg)
 
     return optimizer
 

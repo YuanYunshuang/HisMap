@@ -4,6 +4,7 @@ from glob import glob
 from unittest.mock import patch
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 
 from src.tools.map_analyzer import read_tiff
@@ -17,20 +18,18 @@ colors = {
 
 german2english = {'Wald': 'Woodland', 'Grünland': 'Woodland', 'Siedlung': 'Settlement', 'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater'}
 LGLN_CLS=['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
-LGLN_COLOR = [[85, 166, 48], [221, 223, 0], [176, 137, 104], [144, 224, 239], [3, 4, 255]]
+LGLN_COLOR = [[85, 166, 48], [221, 223, 0], [176, 137, 104], [144, 224, 239], [50, 80, 255]]
 
-def label_to_rgb(in_file, out_file, color, down_sample=2):
-    flow_water = read_tiff(in_file)
-    flow_water = flow_water[::down_sample, ::down_sample]
-    w, h = flow_water.shape
-    flow_water_label = np.zeros((w, h, 3), dtype=np.uint8)
-    labels = np.unique(flow_water)
-    labels = labels[(labels > 0) & (labels != 3)]
-    for i, l in enumerate(labels):
-        flow_water_label[flow_water == l] = colors[color][i]
-    cv2.imwrite(out_file, flow_water_label[..., ::-1])
+def label_to_rgb(in_file, out_file, down_sample=2):
+    label = cv2.imread(in_file, cv2.IMREAD_UNCHANGED) / 50
+    label = label[::down_sample, ::down_sample]
+    w, h = label.shape
+    label_rgb = np.zeros((w, h, 3), dtype=np.uint8)
+    for l in range(1, 6):
+        label_rgb[label == l] = LGLN_COLOR[l-1]
+    cv2.imwrite(out_file, label_rgb[..., ::-1])
 
-def labels_to_rgb(label_path, patch):
+def gt_to_rgb(label_path, patch):
     label_keys = {'Fließgewässer': 'watery', 'Grünland': 'grass', 'Siedlung': 'mission', 'Wald': 'forest'}
     W, H = 11200, 11500
     rgb_label = np.zeros((W, H, 3), dtype=np.uint8)
@@ -102,12 +101,111 @@ def crop_sample_map(path):
     cv2.imwrite(os.path.join(path.replace('maps', 'ica2025'), "3821_2016.jpg"), map2016[x:x+sz, y:y+sz, ::-1])
 
 
-def crop_pseudo_label(in_path, out_path):
-    pass
+def crop_sample_map_and_label_and_prediction():
+    map_path = "/home/yuan/data/HisMap/LGLN/dataset/test/maps"
+    label_path = "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    pred_path = "/home/yuan/data/out/LGLN/trace/pseudo-0.6/pseudo_12-06-03-57-17/epoch5/holistic_seg_result"
+    out_path = "/home/yuan/data/HisMap/LGLN/dataset/icc2025"
+    x = 5200
+    y = 4100
+    sz = 1600
+    year = 1996
+
+    hismap = read_tiff(os.path.join(map_path, f"3922_{year}.tif"))[x:x+sz, y:y+sz]
+    label = cv2.imread(os.path.join(label_path, f"3922_{year}.png"), cv2.IMREAD_UNCHANGED)[x:x+sz, y:y+sz] / 50
+    pred = cv2.imread(os.path.join(pred_path, f"3922_{year}.png"), cv2.IMREAD_UNCHANGED)[x:x+sz, y:y+sz] / 50
+
+    w, h = label.shape
+    label_rgb = np.zeros((w, h, 3), dtype=np.uint8)
+    pred_rgb = np.zeros((w, h, 3), dtype=np.uint8)
+    for l in range(1, 6):
+        label_rgb[label == l] = LGLN_COLOR[l-1]
+        pred_rgb[pred == l] = LGLN_COLOR[l-1]
+
+    cv2.imwrite(os.path.join(out_path, f"3922_{year}_patch_map.jpg"), hismap[::2, ::2])
+    cv2.imwrite(os.path.join(out_path, f"3922_{year}_patch_label.jpg"), label_rgb[::2, ::2, ::-1])
+    cv2.imwrite(os.path.join(out_path, f"3922_{year}_patch_pred.jpg"), pred_rgb[::2, ::2, ::-1])
+
+
+def class_statistic_bar_plot_train():
+    label_path = "/home/yuan/data/HisMap/LGLN/dataset/train/label"
+    label_files = sorted(glob(os.path.join(label_path, "*.png")))
+    label_cnt = np.zeros(6)
+    for f in label_files:
+        label = cv2.imread(f, cv2.IMREAD_UNCHANGED) / 50
+        for l in range(6):
+            label_cnt[l] += np.sum(label == l)
+
+    label_cnt /= np.sum(label_cnt)
+
+    label_path = "/home/yuan/data/HisMap/LGLN/dataset/train/label2023"
+    label_files = sorted(glob(os.path.join(label_path, "*.png")))
+    label_cnt2023 = np.zeros(6)
+    for f in label_files:
+        label = cv2.imread(f, cv2.IMREAD_UNCHANGED) / 50
+        for l in range(6):
+            label_cnt2023[l] += np.sum(label == l)
+
+    label_cnt2023 /= np.sum(label_cnt2023)
+
+    bar_width = 0.35
+    fontsize = 24
+    CLS = ['UK', 'WL', 'GL', 'SM', 'FW', 'SW']
+    x = np.arange(len(CLS))
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(x - bar_width / 2, label_cnt, width=bar_width, label='1973-1975 (bi-directional)')
+    ax.bar(x + bar_width / 2, label_cnt2023, width=bar_width, label='2023 (mono-directional)')
+    # Add labels and title
+    # ax.set_xlabel('Class')
+    ax.set_ylabel('Sample ratio (%)', fontsize=fontsize)
+    ax.set_title('Sample ratio of train labels', fontsize=fontsize)
+    ax.set_xticks(x, CLS, fontsize=fontsize)
+    ax.legend(fontsize=fontsize)
+
+    # Show the plot
+    plt.tight_layout()
+    plt.savefig('/home/yuan/data/HisMap/LGLN/dataset/icc2025/sample_ratio_train.png')
+    plt.close()
+
+
+def class_statistic_bar_plot_test():
+    ### TEST data
+    label_path = "/home/yuan/data/HisMap/LGLN/dataset/test/label"
+    label_files = sorted(glob(os.path.join(label_path, "*.png")))
+    bar_width = 0.2
+    fontsize = 24
+    CLS = ['UK', 'WL', 'GL', 'SM', 'FW', 'SW']
+    x = np.arange(len(CLS))
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(1, 1, 1)
+
+    label_cnt = np.zeros(6)
+    for i, f in enumerate(label_files):
+        label = cv2.imread(f, cv2.IMREAD_UNCHANGED) / 50
+        year = os.path.basename(f)[:-4].split('_')[1]
+        for l in range(6):
+            label_cnt[l] += np.sum(label == l)
+
+        label_cnt /= np.sum(label_cnt)
+        ax.bar(x + bar_width * (i-2), label_cnt, width=bar_width, label=year)
+    # Add labels and title
+    # ax.set_xlabel('Class')
+    ax.set_ylabel('Sample ratio (%)', fontsize=fontsize)
+    ax.set_title('Sample ratio of test labels', fontsize=fontsize)
+    ax.set_xticks(x, CLS, fontsize=fontsize)
+    ax.legend(fontsize=fontsize)
+
+    # Show the plot
+    plt.tight_layout()
+    plt.savefig('/home/yuan/data/HisMap/LGLN/dataset/icc2025/sample_ratio_test.png')
+    plt.close()
 
 
 if __name__ == '__main__':
     path = "/home/yuan/data/HisMap/LGLN/dataset/train/maps"
+    crop_sample_map_and_label_and_prediction()
+
 
 
 

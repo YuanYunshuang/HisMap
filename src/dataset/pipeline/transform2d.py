@@ -113,3 +113,45 @@ class LGLNFormatImage:
                 else:
                     raise ValueError(f'Unexpected key {k}')
         return data_dict
+
+
+class LGLNViTTransform:
+    def __init__(self, mode, degrees=10, color_jitter=0.4):
+        if mode == 'train':
+            self.transforms = v2.Compose([
+                v2.RandomRotation(degrees=(-degrees, degrees)),
+                v2.ColorJitter(color_jitter, color_jitter, color_jitter),
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            ])
+        else:
+            self.transforms = v2.Compose([
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            ])
+
+    def __call__(self, data_dict):
+        data_dict['img'] = self.transforms(data_dict['img'])
+        return data_dict
+
+
+class ImgGridMasking:
+    def __init__(self, grid_size=32, img_size=384):
+        self.grid_size = grid_size
+        self.img_size = img_size
+        num_patches = img_size // grid_size
+        x = np.arange(num_patches)
+        xy = np.stack(np.meshgrid(x, x), axis=-1)
+        mask = np.abs(xy[..., 0] - xy[..., 1]) % 2 == 1
+        self.mask = np.kron(mask, np.ones((grid_size, grid_size)))[..., np.newaxis]
+
+    def __call__(self, data_dict):
+        imgs = data_dict['img']
+        if np.random.random() < 0.5:
+            imgs = imgs * self.mask
+        else:
+            imgs = imgs * (1 - self.mask)
+        data_dict['img'] = imgs
+        return data_dict

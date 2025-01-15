@@ -1,7 +1,7 @@
-
-
+import math
 import os
 import time
+from functools import partial
 
 import cv2
 import numpy as np
@@ -451,6 +451,125 @@ class LGLNPseudoLabelHook(BaseHook):
             dataset.post_update_pseudo_labels(pseudo_labels)
 
 
+class CCVitResultHook(BaseHook):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.results = []
+
+    def set_logger(self, logger):
+        self.log_dir = os.path.join(logger.logdir, 'cls_result')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+    def draw_attn_on_img(self, img, attn, ax, title=None):
+        # Resize attention map to match the image size (512x512)
+        attn = np.clip(attn * 1000, 0, 1)
+        s = img.shape[0] // attn.shape[0]
+        attention_map_resized = np.kron(attn, np.ones((s, s)))
+
+        ax.imshow(img, extent=(0, img.shape[0], 0, img.shape[1]))  # Show the image
+        ax.imshow(attention_map_resized, cmap='jet', alpha=0.5, extent=(0, img.shape[0], 0, img.shape[1]))
+        ax.set_title(title)
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        vit = runner.model.vit
+        import matplotlib.pyplot as plt
+
+        attn = vit.cross_attn.attn_weight[:, 0, 0, 1:].cpu().numpy()
+        s = int(math.sqrt(attn.shape[-1]))
+        attn = attn.reshape(-1, s, s)
+
+        for i, (patch, year, x, y, img, conf, label) in enumerate(zip(
+            out_dict['patch'],
+            out_dict['year'],
+            out_dict['x'],
+            out_dict['y'],
+            out_dict['img'],
+            out_dict['conf'],
+            out_dict['label']
+        )):
+            if i % 5 != 0: continue
+            img = img.cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5
+            fig = plt.figure(figsize=(8, 4))
+            axs = fig.subplots(1, 2)
+            axs[0].imshow(img)
+            self.draw_attn_on_img(img[::2, ::2], attn[i], axs[1], title='attn weights')
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}.jpg'))
+            plt.close()
+            # cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}.jpg'),
+            #             (img.permute(1, 2, 0).cpu().numpy() * 0.5 + 0.5) * 255)
+        self.results.append(torch.stack([out_dict['conf'].argmax(-1), out_dict['label']], dim=-1))
+
+    def post_epoch(self, runner, **kwargs):
+        res = torch.cat(self.results, dim=0)
+        acc = (res[:, 0] == res[:, 1]).sum() / len(res)
+        print(f"Accuracy: {acc * 100:.2f}%")
+
+
+class CVitResultHook(BaseHook):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.results = []
+
+    def set_logger(self, logger):
+        self.log_dir = os.path.join(logger.logdir, 'cls_result')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+    def draw_attn_on_img(self, img, attn, ax, title=None):
+        # Resize attention map to match the image size (512x512)
+        attn = np.clip(attn * 1000, 0, 1)
+        s = img.shape[0] // attn.shape[0]
+        attention_map_resized = np.kron(attn, np.ones((s, s)))
+
+        ax.imshow(img, extent=(0, img.shape[0], 0, img.shape[1]))  # Show the image
+        ax.imshow(attention_map_resized, cmap='jet', alpha=0.5, extent=(0, img.shape[0], 0, img.shape[1]))
+        ax.set_title(title)
+
+    def post_iter(self, runner, **kwargs):
+        out_dict = runner.model.out_dict
+        vit = runner.model.vit
+        attn_weights = {}
+        import matplotlib.pyplot as plt
+        for i, msb in enumerate(vit.blocks): # multi scale block
+            for j, sab in enumerate(msb.blocks): # self attention block
+                attn_weight = sab[0].attn.attn_weight
+                s = int(math.sqrt(attn_weight.shape[-1] - 1))
+                attn_weights[f'msb{i}_sab{j}'] = attn_weight[:, 0, 0, 1:].view(-1, s, s)
+            for k, cab in enumerate(msb.blocks): # cross attention block
+                attn_weight = cab[0].attn.attn_weight
+                attn_weights[f'msb{i}_cab{j}'] = attn_weight[:, 0, 0, 1:].view(-1, s, s)
+
+        for i, (patch, year, x, y, img, conf, label) in enumerate(zip(
+            out_dict['patch'],
+            out_dict['year'],
+            out_dict['x'],
+            out_dict['y'],
+            out_dict['img'],
+            out_dict['conf'],
+            out_dict['label']
+        )):
+            if i % 5 != 0: continue
+            img = img.cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5
+            fig = plt.figure(figsize=(10, 4))
+            axs = fig.subplots(2, 5)
+            axs[0, 0].imshow(img)
+            attns = [(k, v[i].cpu().numpy()) for k, v in attn_weights.items()]
+            for j in range(1, 10):
+                row = j // 5
+                col = j % 5
+                self.draw_attn_on_img(img[::2, ::2], attns[j-1][1], axs[row, col], title=attns[j-1][0])
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}.jpg'))
+            plt.close()
+            # cv2.imwrite(os.path.join(self.log_dir, f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}.jpg'),
+            #             (img.permute(1, 2, 0).cpu().numpy() * 0.5 + 0.5) * 255)
+        self.results.append(torch.stack([out_dict['conf'].argmax(-1), out_dict['label']], dim=-1))
+
+    def post_epoch(self, runner, **kwargs):
+        res = torch.cat(self.results, dim=0)
+        acc = (res[:, 0] == res[:, 1]).sum() / len(res)
+        print(f"Accuracy: {acc * 100:.2f}%")
 
 
 

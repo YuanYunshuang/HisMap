@@ -138,7 +138,7 @@ class LGLNViTTransform:
 
 
 class ImgGridMasking:
-    def __init__(self, grid_size=32, img_size=384):
+    def __init__(self, grid_size=64, img_size=384):
         self.grid_size = grid_size
         self.img_size = img_size
         num_patches = img_size // grid_size

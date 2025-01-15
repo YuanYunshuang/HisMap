@@ -136,6 +136,29 @@ class DropPath(nn.Module):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
 
+class DropPatch(nn.Module):
+    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
+    src: https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/drop.py
+    """
+    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
+        super(DropPatch, self).__init__()
+        self.drop_prob = drop_prob
+        self.scale_by_keep = scale_by_keep
+
+    def forward(self, x):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = x.shape[:2] + (1,) * (x.ndim - 2)  # work with diff dim tensors, not just 2D ConvNets
+        random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+        if keep_prob > 0.0 and self.scale_by_keep:
+            random_tensor.div_(keep_prob)
+        return x * random_tensor
+
+    def extra_repr(self):
+        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+
+
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks
 

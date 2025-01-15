@@ -9,7 +9,7 @@ import torch.hub
 from functools import partial
 
 from src.utils.common import to_2tuple
-from src.utils.vit_util import trunc_normal_, DropPath, Mlp, Block, compute_num_patches
+from src.utils.vit_util import trunc_normal_, DropPath, Mlp, Block, compute_num_patches, DropPatch
 from src.dlmodule.unet import DownConv
 
 IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
@@ -278,7 +278,8 @@ class VisionTransformer(nn.Module):
 
 
 class ConvVitV1(nn.Module):
-    def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=2, norm_layer=nn.LayerNorm, **kwargs):
+    def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=2, norm_layer=nn.LayerNorm,
+                 drop_patch=False, **kwargs):
         super().__init__()
         blocks = []
         for _ in range(depth):
@@ -294,6 +295,7 @@ class ConvVitV1(nn.Module):
         down_ratio = 2 ** depth
         num_patches = (img_size // down_ratio) ** 2
         self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, out_channel))
+        self.drop_patch = DropPatch(0.2) if drop_patch else None
         self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=True)
         self.cls_token = nn.Parameter(torch.zeros(1, out_channel))
 
@@ -316,6 +318,8 @@ class ConvVitV1(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
 
+        if self.drop_patch:
+            x = self.drop_patch(x)
         x = self.cross_attn(x)
 
         out = self.norm(x)[:, 0]
@@ -416,5 +420,10 @@ def crossvit_tiny_512(**kwargs):
 
 def crossvit_conv_384(**kwargs):
     model = ConvVit(**kwargs)
+    model.default_cfg = _cfg()
+    return model
+
+def crossvit_conv_384_v1(**kwargs):
+    model = ConvVitV1(**kwargs)
     model.default_cfg = _cfg()
     return model

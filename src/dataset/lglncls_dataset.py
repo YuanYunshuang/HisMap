@@ -2,7 +2,7 @@ import copy
 import os
 from fileinput import filename
 from random import random
-
+import argparse
 import tqdm
 
 import cv2
@@ -110,10 +110,16 @@ class LglnclsDataset(Dataset):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path-in", type=str)
+    parser.add_argument("--path-out", type=str)
+    parser.add_argument("--crop-size", type=int, default=384)
+    args = parser.parse_args()
+
     for mode in ['train', 'test']:
         generate_dataset(
-            "/home/yuan/data/HisMap/LGLN/dataset",
-            "/home/yuan/data/HisMap/LGLN/data_img_cls_384_128",
+            args.path_in,
+            args.path_out,
             mode=mode,
             crop_size=384,
         )

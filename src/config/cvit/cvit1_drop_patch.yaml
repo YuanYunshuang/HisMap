@@ -8,7 +8,6 @@ DATASET:
   gpus: 0
 
   train_pipeline:
-    - ImgRandomMasking: {}
     - LGLNViTTransform:
         mode: train
   test_pipeline:

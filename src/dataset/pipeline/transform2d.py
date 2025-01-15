@@ -155,3 +155,21 @@ class ImgGridMasking:
             imgs = imgs * (1 - self.mask)
         data_dict['img'] = imgs
         return data_dict
+
+
+class ImgRandomMasking:
+    def __init__(self, grid_size=64, img_size=384, pos_ratio=0.8):
+        self.grid_size = grid_size
+        self.img_size = img_size
+        num_patches = img_size // grid_size
+        mask = np.random.rand(num_patches, num_patches) < pos_ratio
+        self.mask = np.kron(mask, np.ones((grid_size, grid_size)))[..., np.newaxis]
+
+    def __call__(self, data_dict):
+        imgs = data_dict['img']
+        if np.random.random() < 0.5:
+            imgs = imgs * self.mask
+        else:
+            imgs = imgs * (1 - self.mask)
+        data_dict['img'] = imgs
+        return data_dict

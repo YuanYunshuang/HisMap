@@ -6,10 +6,10 @@ from src.losses import build_loss, pred_to_conf_unc
 
 
 class VitClassifier(nn.Module):
-    def __init__(self, vit_type, loss_cfg, **kwargs):
+    def __init__(self, vit_type, loss_cfg, drop_patch=False, **kwargs):
         super().__init__()
         use_fused_attn = True if kwargs.get('mode', 'train') == 'train' else False
-        self.vit = getattr(vit, f"crossvit_{vit_type}")(fused_attn=use_fused_attn)
+        self.vit = getattr(vit, f"crossvit_{vit_type}")(fused_attn=use_fused_attn, drop_patch=drop_patch)
         self.loss_fn = build_loss(**loss_cfg)
 
     def forward(self, data, **kwargs):

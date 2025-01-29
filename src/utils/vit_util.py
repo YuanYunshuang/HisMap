@@ -145,15 +145,34 @@ class DropPatch(nn.Module):
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
 
-    def forward(self, x):
-        if self.drop_prob == 0. or not self.training:
+    def forward(self, x, drop_patch_mask=None):
+        if drop_patch_mask is not None:
+            if isinstance(x, list):
+                x = torch.stack(x, dim=0)
+
+            keep_prob = (drop_patch_mask == 0).sum(dim=-1, keepdim=True) / drop_patch_mask.shape[-1]
+            drop_tensor = (1 - drop_patch_mask) / keep_prob
+            x[..., 1:, :] = x[..., 1:, :] * drop_tensor.unsqueeze(-1)
             return x
+        if self.drop_prob == 0.:
+            return x
+
         keep_prob = 1 - self.drop_prob
-        shape = x.shape[:2] + (1,) * (x.ndim - 2)  # work with diff dim tensors, not just 2D ConvNets
-        random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
-        if keep_prob > 0.0 and self.scale_by_keep:
-            random_tensor.div_(keep_prob)
-        return x * random_tensor
+
+        if isinstance(x, list):
+            shape = (len(x),) + x[0].shape[:2] + (1,) * (x[0].ndim - 2)  # work with diff dim tensors, not just 2D ConvNets
+            random_tensor = x[0].new_empty(shape).bernoulli_(keep_prob)
+            if keep_prob > 0.0 and self.scale_by_keep:
+                random_tensor.div_(keep_prob)
+            return [x_ * rt for x_, rt in zip(x, random_tensor)]
+
+        else:
+            shape = x.shape[:2] + (1,) * (x.ndim - 2)  # work with diff dim tensors, not just 2D ConvNets
+            random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+            if keep_prob > 0.0 and self.scale_by_keep:
+                random_tensor.div_(keep_prob)
+            return x * random_tensor
+
 
     def extra_repr(self):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'

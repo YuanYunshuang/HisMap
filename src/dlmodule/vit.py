@@ -1,5 +1,5 @@
 # Modified from https://github.com/IBM/CrossViT/blob/main/models/crossvit.py#L41
-
+import timeit
 from typing import Any, Dict
 
 import torch
@@ -10,10 +10,39 @@ from functools import partial
 
 from src.utils.common import to_2tuple
 from src.utils.vit_util import trunc_normal_, DropPath, Mlp, Block, compute_num_patches, DropPatch
-from src.dlmodule.unet import DownConv
+from src.dlmodule.unet import conv3x3
 
 IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
 IMAGENET_INCEPTION_STD = (0.5, 0.5, 0.5)
+
+
+class DownConv(nn.Module):
+    """
+    A helper Module that performs 2 convolutions and 1 MaxPool.
+    A ReLU activation follows each convolution.
+    """
+
+    def __init__(self, in_channels, out_channels):
+        super(DownConv, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.conv = nn.Sequential(
+            conv3x3(self.in_channels, self.out_channels),
+            nn.BatchNorm2d(self.out_channels),
+            nn.ReLU(inplace=True),
+            conv3x3(self.out_channels, self.out_channels, stride=2),
+            nn.BatchNorm2d(self.out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+
+    def forward(self, x):
+        # tic = timeit.default_timer()
+        x = self.conv(x)
+        # print('conv_blk:', timeit.default_timer() - tic)
+        return x
 
 
 class PatchEmbed(nn.Module):
@@ -296,7 +325,7 @@ class ConvVitV1(nn.Module):
         num_patches = (img_size // down_ratio) ** 2
         self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, out_channel))
         self.drop_patch = DropPatch(0.2) if drop_patch else None
-        self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=True)
+        self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=False)
         self.cls_token = nn.Parameter(torch.zeros(1, out_channel))
 
         self.norm = norm_layer(out_channel)
@@ -309,25 +338,31 @@ class ConvVitV1(nn.Module):
             out.add('pos_embed')
         return out
 
-    def forward_features(self, x):
+    def forward_features(self, x, **kwargs):
         B, C, H, W = x.shape
+        # tic = timeit.default_timer()
         for blk in self.conv_blocks:
-            x = blk(x)[0]
+            x = blk(x)
+        # print('blk:',timeit.default_timer() - tic)
+
+        # tic = timeit.default_timer()
         x = self.proj_conv(x).flatten(2, 3).permute(0, 2, 1) #BLD
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+        # print('proj:', timeit.default_timer() - tic)
 
+        # tic = timeit.default_timer()
         if self.drop_patch:
-            x = self.drop_patch(x)
+            x = self.drop_patch(x, kwargs.get('drop_patch_mask', None))
         x = self.cross_attn(x)
-
+        # print('cross_attn:', timeit.default_timer() - tic)
         out = self.norm(x)[:, 0]
 
         return out
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward(self, x, **kwargs):
+        x = self.forward_features(x, **kwargs)
         ce_logits = self.head(x)
         return ce_logits
 
@@ -385,6 +420,68 @@ class ConvVit(nn.Module):
         return ce_logits
 
 
+class ConvVitMultiCls(nn.Module):
+    def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=4, norm_layer=nn.LayerNorm,
+                 drop_patch=False, **kwargs):
+        super().__init__()
+        blocks = []
+        for _ in range(depth):
+            out_dim = max(16, in_channel * 2)
+            blocks.append(DownConv(in_channel, out_dim))
+            in_channel = out_dim
+        self.conv_blocks = nn.Sequential(*blocks)
+        self.proj_conv = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=1),
+            nn.ReLU(inplace=True),
+        )
+
+        down_ratio = 2 ** depth
+        num_patches = (img_size // down_ratio) ** 2
+        self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, out_channel))
+        self.drop_patch = DropPatch(0.2) if drop_patch else None
+        self.cross_attn = nn.ModuleList([CrossAttention(out_channel, num_heads=1, qkv_bias=False) for _ in range(num_classes)])
+        self.cls_token = nn.Parameter(torch.zeros(num_classes, 1, out_channel))
+
+        self.norm = nn.ModuleList([norm_layer(out_channel) for _ in range(num_classes)])
+        self.head = nn.ModuleList([nn.Linear(out_channel, 1) for _ in range(num_classes)])
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        out = {'cls_token'}
+        if self.pos_embed[0].requires_grad:
+            out.add('pos_embed')
+        return out
+
+    def forward_features(self, x, **kwargs):
+        B, C, H, W = x.shape
+        # tic = timeit.default_timer()
+        for blk in self.conv_blocks:
+            x = blk(x)
+        # print('blk:',timeit.default_timer() - tic)
+
+        x = self.proj_conv(x).flatten(2, 3).permute(0, 2, 1) #BLD
+
+        xs = []
+        for ct in self.cls_token:
+            cls_token = ct.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+            x_ = torch.cat((cls_token, x), dim=1)
+            x_ = x_ + self.pos_embed
+            xs.append(x_)
+
+        if self.drop_patch:
+            xs = self.drop_patch(xs, kwargs.get('drop_patch_mask', None))
+
+        outs = []
+        for ca, norm, x_ in zip(self.cross_attn, self.norm, xs):
+            outs.append(norm(ca(x_))[:, 0])
+        return outs
+
+    def forward(self, x, **kwargs):
+        x = self.forward_features(x, **kwargs)
+        ce_logits = torch.cat([h(x_) for x_, h in zip(x, self.head)], dim=-1)
+        return ce_logits
+
+
 def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
@@ -425,5 +522,10 @@ def crossvit_conv_384(**kwargs):
 
 def crossvit_conv_384_v1(**kwargs):
     model = ConvVitV1(**kwargs)
+    model.default_cfg = _cfg()
+    return model
+
+def crossvit_conv_384_multi_cls(**kwargs):
+    model = ConvVitMultiCls(**kwargs)
     model.default_cfg = _cfg()
     return model

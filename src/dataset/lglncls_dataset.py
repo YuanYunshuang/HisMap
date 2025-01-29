@@ -1,16 +1,11 @@
-import copy
+import glob
 import os
-from fileinput import filename
-from random import random
 import argparse
-import tqdm
 
 import cv2
-from PIL import Image
 import numpy as np
 import torch
-from sympy.physics.units import years
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 from src.dataset.pipeline import Pipeline
 from src.tools.map_analyzer import read_tiff
@@ -18,7 +13,11 @@ from src.tools.map_analyzer import read_tiff
 CLASSES = ['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
 
 
-def generate_dataset(path_in, path_out, mode='train', crop_size=384, num_pixel_present=100, margin=128):
+def generate_dataset_v1(path_in, path_out, mode='train', crop_size=384, num_pixel_present=100, margin=128):
+    """
+    Split train and test set according to the given mode, the map sheets in the corresponding folder will be cropped
+    and regarded as the same split.
+    """
     # Train data
     path_maps = os.path.join(path_in, mode, 'maps')
     path_labels = os.path.join(path_in, mode, 'label')
@@ -33,7 +32,7 @@ def generate_dataset(path_in, path_out, mode='train', crop_size=384, num_pixel_p
         label = cv2.imread(os.path.join(path_labels, f), cv2.IMREAD_GRAYSCALE) / 50
         hismap = read_tiff(os.path.join(path_maps, f.replace('png', 'tif')))
         # h, w = max(label.shape[0], hismap.shape[0]), max(label.shape[1], hismap.shape[1])
-        h, w = hismap.shape[0], label.shape[1]
+        h, w = label.shape[0], label.shape[1]
         x = np.arange(0, h, margin)
         y = np.arange(0, w, margin)
         xs, ys = np.meshgrid(x, y)
@@ -57,6 +56,64 @@ def generate_dataset(path_in, path_out, mode='train', crop_size=384, num_pixel_p
             cv2.imwrite(os.path.join(path_out_, f"{patch}_{year}_{x1}_{y1}_{l_cls}.jpg"), M)
 
 
+def generate_dataset_v2(path_in, path_out, mode='train', crop_size=384, num_pixel_present=100, margin=128):
+    """
+    Split train and test set patch-wise. On each map sheet, the cropped patches are alternately
+    saved to the train and test sets.
+    """
+    if mode == 'test': margin = None
+    if margin is None: margin = crop_size
+    label_files = glob.glob(os.path.join(path_in, '*/label/*.png'))
+    path_out = os.path.join(path_out, mode)
+    os.makedirs(path_out, exist_ok=True)
+    for f in label_files:
+        path, basename = os.path.split(f)
+        split = path.split('/')[-2]
+        patch, year = basename.split('.')[0].split('_')
+        label = cv2.imread(f, cv2.IMREAD_GRAYSCALE) / 50
+        filename = os.path.join(path_in, split, 'maps', f"{patch}_{year}.tif")
+        if not os.path.exists(filename):
+            filename = os.path.join(path_in, split, 'label', f"{patch}_{int(year) - 1:d}.tif")
+        if not os.path.exists(filename):
+            filename = os.path.join(path_in, split, 'label', f"{patch}_{int(year) + 1:d}.tif")
+        if not os.path.exists(filename):
+            continue
+        print(filename)
+        hismap = read_tiff(filename)
+        # if hismap.ndim == 3:
+        #     hismap = cv2.cvtColor(hismap, cv2.COLOR_BGR2GRAY)
+
+        h, w = label.shape[0], label.shape[1]
+        x = np.arange(0, h, margin)
+        y = np.arange(0, w, margin)
+        xs, ys = np.meshgrid(x, y)
+        xs, ys = xs.flatten(), ys.flatten()
+        for x1, y1 in zip(xs, ys):
+            x2, y2 = x1 + crop_size, y1 + crop_size
+            x2 = h if x2 > h else x2
+            y2 = w if y2 > w else y2
+            L = label[y1:y2, x1:x2]
+            M = hismap[y1:y2, x1:x2]
+            # M = cv2.cvtColor(M, cv2.COLOR_BGR2GRAY)
+
+            l_cls = ''
+            for i in range(1, 5):
+                if i == 4 and np.sum(L >= i) > num_pixel_present:
+                    l_cls += '1'
+                elif np.sum(L == i) > num_pixel_present:
+                    l_cls += '1'
+                else:
+                    l_cls += '0'
+            if M.ndim == 2:
+                M = M[:, :, None].repeat(3, axis=-1)
+            M = np.pad(M, ((0, crop_size - M.shape[0]), (0, crop_size - M.shape[1]), (0, 0)), mode='constant', constant_values=0)
+
+            cv2.imwrite(os.path.join(path_out, f"{patch}_{year}_{x1}_{y1}_{l_cls}_a.jpg"), M)
+            if mode == 'train' and hismap.ndim == 3:
+                M = cv2.cvtColor(M, cv2.COLOR_BGR2GRAY)[:, :, None].repeat(3, axis=-1)
+                cv2.imwrite(os.path.join(path_out, f"{patch}_{year}_{x1}_{y1}_{l_cls}_b.jpg"), M)
+
+
 class LglnclsDataset(Dataset):
 
     def __init__(self,
@@ -66,11 +123,32 @@ class LglnclsDataset(Dataset):
         self.cfgs = cfgs
         self.root_dir = cfgs['data_path']
         self.mode = mode
+        self.multi_cls = cfgs.get('multi_cls', False)
+        label_pattern = cfgs.get('label_pattern', None)
 
-        self.img_dir = os.path.join(self.root_dir, self.mode)
-        self.samples = os.listdir(self.img_dir)
-
-        self.pipeline = Pipeline(cfgs[f'{mode}_pipeline'])
+        if mode == 'inference':
+            self.samples = []
+            self.img_dir = self.root_dir
+            for split in ['train', 'test']:
+                self.samples.extend([os.path.join(split, x) for x in os.listdir(os.path.join(self.root_dir, split))])
+        else:
+            self.img_dir = os.path.join(self.root_dir, self.mode)
+            self.samples = os.listdir(self.img_dir)
+        if label_pattern is not None:
+            samples = []
+            assert len(label_pattern) == len(self.samples[0].split('_')[-2])
+            for sample in self.samples:
+                label = sample.split('_')[-1].split('.')[0]
+                flag = True
+                for pi in [i for i, p in enumerate(label_pattern) if p != '*']:
+                    if label[pi] != label_pattern[pi]:
+                        flag = False
+                        break
+                if flag:
+                    samples.append(sample)
+            self.samples = samples
+        pl_name = 'train' if mode == 'train' else 'test'
+        self.pipeline = Pipeline(cfgs[f'{pl_name}_pipeline'])
 
 
     def __len__(self):
@@ -78,7 +156,7 @@ class LglnclsDataset(Dataset):
 
     def __getitem__(self, item):
         filename = self.samples[item]
-        patch, year, x , y, l = filename.split('.')[0].split('_')
+        patch, year, x , y, l, _ = filename.split('.')[0].split('_')
         img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_UNCHANGED)
 
         data = {
@@ -87,12 +165,13 @@ class LglnclsDataset(Dataset):
             'x': x,
             'y': y,
             'img': img,
-            'label': int(l[0]),
+            'label': torch.Tensor([int(x) for x in l]) if self.multi_cls else int(l[0]),
         }
         data = self.pipeline(data)
         return data
 
-    def collate_batch(self, data_list):
+    @staticmethod
+    def collate_batch(data_list):
         data_dict = {}
         for k in data_list[0].keys():
             data = [x[k] for x in data_list]
@@ -116,13 +195,20 @@ if __name__ == '__main__':
     parser.add_argument("--crop-size", type=int, default=384)
     args = parser.parse_args()
 
-    for mode in ['train', 'test']:
-        generate_dataset(
-            args.path_in,
-            args.path_out,
-            mode=mode,
-            crop_size=384,
-        )
+    # for mode in ['train', 'test']:
+    #     generate_dataset_v2(
+    #         args.path_in,
+    #         args.path_out,
+    #         mode=mode,
+    #         crop_size=args.crop_size,
+    #     )
+
+    generate_dataset_v2(
+        args.path_in,
+        args.path_out,
+        mode='test',
+        crop_size=args.crop_size,
+    )
 
     # from src.utils.misc import load_yaml
     # cfg = load_yaml('../config/cvit/demo.yaml')

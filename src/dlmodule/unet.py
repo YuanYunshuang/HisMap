@@ -65,11 +65,14 @@ class DownConv(nn.Module):
             self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
     def forward(self, x):
+        import timeit
+        tic = timeit.default_timer()
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         before_pool = x
         if self.pooling:
             x = self.pool(x)
+        print('conv_blk:', timeit.default_timer() - tic)
         return x, before_pool
 
 

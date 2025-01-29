@@ -38,7 +38,7 @@ class LglnDataset(Dataset):
 
         self.init_paths()
         self.parse_meta(cfgs)
-        if self.load_to_memory or self.mode == 'test':
+        if self.load_to_memory or self.mode == 'test' or self.mode == 'inference':
             self.load_maps()
             self.load_labels()
         else:
@@ -50,6 +50,7 @@ class LglnDataset(Dataset):
 
         self.train_pipeline = Pipeline(cfgs['train_pipeline'])
         self.test_pipeline = Pipeline(cfgs['test_pipeline'])
+        self.inference_pipeline = self.test_pipeline
 
     def init_paths(self):
         self.map_dir = os.path.join(self.root_dir, self.mode, 'maps')
@@ -87,6 +88,9 @@ class LglnDataset(Dataset):
             end_year = cfgs['end_year']
             years = list(set(years))
             self.years = [y for y in years if (y >= start_year) and (y <= end_year)]
+
+        print('years:', self.years)
+        print('meta:', self.meta)
 
     def load_maps(self):
         # parse maps in valid age
@@ -192,6 +196,9 @@ class LglnDataset(Dataset):
     def load_labels(self, meta_only=False):
         labels = {}
         print("\nLoading labels ...")
+        if not os.path.exists(self.label_dir):
+            self.labels = labels
+            return
         for x in tqdm.tqdm(sorted(os.listdir(self.label_dir))):
             patch, year = x.split('.')[0].split('_')
             patch, year = int(patch), int(year)

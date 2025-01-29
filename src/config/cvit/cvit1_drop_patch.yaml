@@ -1,7 +1,7 @@
 DATASET:
   dataset: lglncls
   name: lglncls
-  data_path: /home/yuan/data/HisMap/LGLN/data_img_cls_384_128
+  data_path: /home/yuan/data/HisMap/LGLN/dataset/attn
   mode: train
   batch_size: 64
   n_workers: 4

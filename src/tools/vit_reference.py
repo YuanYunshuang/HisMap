@@ -20,7 +20,7 @@ torch.backends.cudnn.benchmark = True
 
 def draw_attn_on_img(img, attn, ax, title=None):
     # Resize attention map to match the image size (512x512)
-    attn = np.clip(attn, 0, 1)
+    attn = np.clip(attn.cpu().numpy(), 0, 1)
     attn_size = int(math.sqrt(attn.shape[0]))
     attn = attn.reshape(attn_size, attn_size)
     s = img.shape[0] // attn_size
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", type=str)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--n-workers", type=int)
-    parser.add_argument("--visualize", type=bool, default=False)
+    parser.add_argument("--visualize", action="store_true")
     parser.add_argument("--label-pattern", type=str, default="1****")
     args = parser.parse_args()
     args.__setattr__('mode', 'inference')
@@ -56,6 +56,9 @@ if __name__ == "__main__":
         cfgs['DATASET']['data_path'] = args.data_path
     if args.label_pattern is not None:
         cfgs['DATASET']['label_pattern'] = args.label_pattern
+    log_dir = args.load_from[:-4]
+    os.makedirs(f'{log_dir}/imgs', exist_ok=True)
+    os.makedirs(f'{log_dir}/inference', exist_ok=True)
 
     # Initialize modules
     dataloader = get_dataloader(cfgs['DATASET'], 'inference')
@@ -127,7 +130,7 @@ if __name__ == "__main__":
                         img = img.cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5
                         draw_attn_on_img(img[::2, ::2], patch_drop_mask[i], axs[i], title=f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}')
                     plt.tight_layout()
-                    plt.savefig(f'/home/yuan/code/HisMap/logs/default_01-21-15-24-28/inference/{cnt}.jpg')
+                    plt.savefig(f'{log_dir}/imgs/{cnt}.jpg')
                     plt.close()
             cnt += 1
 
@@ -138,5 +141,5 @@ if __name__ == "__main__":
                     'conf': [x[i] for x in res_conf],
                     'label': res_labels[i]
                 }
-                save_json(res_dict, f"/home/yuan/code/HisMap/logs/default_01-22-15-21-25/inference/{name}.json")
+                save_json(res_dict, f"{log_dir}/inference/{name}.json")
 

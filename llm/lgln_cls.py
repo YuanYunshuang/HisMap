@@ -80,4 +80,4 @@ def crop_series(sheet_files, label_files, crop_size, scale=0.5, use_label=False)
 
 if __name__ == '__main__':
     sheet_files, label_files = parse_valid_maps("/home/yuan/data/HisMap/LGLN/dataset/age_tracing_data")
-    crop_series(sheet_files, label_files,3072, 0.5, use_label=True)
+    crop_series(sheet_files, label_files,3072, 0.35, use_label=True)

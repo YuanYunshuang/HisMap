@@ -136,9 +136,12 @@ class LglnclsDataset(Dataset):
             self.samples = os.listdir(self.img_dir)
         if label_pattern is not None:
             samples = []
-            assert len(label_pattern) == len(self.samples[0].split('_')[-2])
+            if len(label_pattern) == 5:
+                assert len(label_pattern) == len(self.samples[0].split('_')[-1].split('.')[0])
+            else:
+                assert len(label_pattern) == len(self.samples[0].split('_')[-2])
             for sample in self.samples:
-                label = sample.split('_')[-1].split('.')[0]
+                label = sample.split('_')[-2]
                 flag = True
                 for pi in [i for i, p in enumerate(label_pattern) if p != '*']:
                     if label[pi] != label_pattern[pi]:
@@ -156,7 +159,7 @@ class LglnclsDataset(Dataset):
 
     def __getitem__(self, item):
         filename = self.samples[item]
-        patch, year, x , y, l, _ = filename.split('.')[0].split('_')
+        patch, year, x , y, l = filename.split('.')[0].split('_')[:5]
         img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_UNCHANGED)
 
         data = {

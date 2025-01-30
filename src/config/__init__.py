@@ -47,6 +47,8 @@ def load_config(args):
     elif args.mode == 'test':
         cfg['TEST']['load_from'] = args.load_from
         cfg['TEST']['log_dir'] = args.log_dir
+    elif args.mode == 'inference':
+        cfg['TEST']['load_from'] = args.load_from
 
     return cfg
 

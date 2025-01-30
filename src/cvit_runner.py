@@ -75,7 +75,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
-    seed_everything(2023)
+    # seed_everything(2023)
     if args.config is None:
         assert args.load_from is not None or args.resume_from is not None
         if args.load_from is not None:

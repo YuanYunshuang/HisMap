@@ -16,7 +16,7 @@ colors = {
     "forest": [[0, 127, 95], [43, 147, 72], [85, 166, 48], [128, 185, 24], [170, 204, 0]]
 }
 
-german2english = {'Wald': 'Woodland', 'Grünland': 'Woodland', 'Siedlung': 'Settlement', 'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater'}
+german2english = {'Wald': 'Woodland', 'Grünland': 'Grassland', 'Siedlung': 'Settlement', 'Fließgewässer': 'FlowingWater', 'Stillgewässer': 'StandingWater'}
 LGLN_CLS=['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
 LGLN_COLOR = [[85, 166, 48], [221, 223, 0], [176, 137, 104], [144, 224, 239], [50, 80, 255]]
 
@@ -86,6 +86,27 @@ def remap_label(in_path):
                 remapped_label[l] = (i + 1) * 50
             cv2.imwrite(os.path.join(out_path, f"{patch}_{year}.png"), remapped_label)
 
+
+def remap_tk_label(in_path):
+    out_path = in_path.replace('gt', 'label')
+    os.makedirs(out_path, exist_ok=True)
+    years = sorted(os.listdir(in_path))
+
+    for year in years:
+        data = {p: {} for p in ['3821', '3822', '3921', '3922']}
+        files = sorted(glob(in_path + "/" + year + "/*.tif"))
+        for f in files:
+            patch, cls = os.path.basename(f).split(".")[0].split("_")
+            label = LGLN_CLS.index(german2english[cls])
+            TIF = read_tiff(f)
+            data[patch][label] = TIF == 1
+
+        for patch, labels in data.items():
+            remapped_label = np.zeros_like(labels[0]).astype(np.uint8)
+            for i in range(5):
+                l = labels[i]
+                remapped_label[l] = (i + 1) * 50
+            cv2.imwrite(os.path.join(out_path, f"{patch}_{year}.png"), remapped_label)
 
 def crop_sample_map(path):
     map1898 = read_tiff(os.path.join(path, "3821_1898.tif"))
@@ -204,8 +225,14 @@ def class_statistic_bar_plot_test():
 
 if __name__ == '__main__':
     path = "/home/yuan/data/HisMap/LGLN/dataset/train/maps"
-    crop_sample_map_and_label_and_prediction()
-
+    # crop_sample_map_and_label_and_prediction()
+    # for f in glob("/home/yuan/data/out/tmp/generate_pred/trace_bi/holistic_seg_result/*.png"):
+    #     label_to_rgb(
+    #         f,
+    #         f.replace(".png", "_rgb_x2_dowmsampled.png"),
+    #         2
+    #     )
+    remap_tk_label("/home/yuan/data/HisMap/LGLN/dataset/age_tracing_data/tk_gt")
 
 
 

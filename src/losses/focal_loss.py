@@ -334,3 +334,55 @@ class FocalLoss(BaseLoss):
         return loss_cls
 
 
+class BinaryFocalLoss(BaseLoss):
+
+    def __init__(self,
+                 use_sigmoid: bool=True,
+                 gamma: float=2.0,
+                 alpha: float=0.25,
+                 activated: bool=False,
+                 bg_idx: int=None,
+                 **kwargs):
+        """`Focal Loss <https://arxiv.org/abs/1708.02002>`_
+
+        :param use_sigmoid: Whether to the prediction is
+                used for sigmoid or softmax. Defaults to True.
+        :param gamma: The gamma for calculating the modulating
+                factor. Defaults to 2.0.
+        :param alpha: A balanced form for Focal Loss.
+                Defaults to 0.25.
+        :param activated:  Whether the input is activated.
+                If True, it means the input has been activated and can be
+                treated as probabilities. Else, it should be treated as logits.
+                Defaults to False.
+        :param bg_idx: background class index.
+        :param kwargs:
+        """
+        super(BinaryFocalLoss, self).__init__(**kwargs)
+        self.use_sigmoid = use_sigmoid
+        self.gamma = gamma
+        self.alpha = alpha
+        self.activated = activated
+        self.bg_idx = bg_idx
+        if use_sigmoid:
+            self.activation = 'sigmoid'
+        else:
+            self.activation = 'softmax'
+
+    def loss(self, pred: torch.Tensor, target: torch.Tensor, *args, **kwargs):
+        """
+        :param pred: prediction.
+        :param target: ground truth targets.
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        loss_cls = py_sigmoid_focal_loss(
+            pred,
+            target,
+            gamma=self.gamma,
+            alpha=self.alpha)
+
+        return loss_cls
+
+

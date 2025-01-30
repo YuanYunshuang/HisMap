@@ -14,7 +14,7 @@ class VitClassifier(nn.Module):
 
     def forward(self, data, **kwargs):
         x = data['img']
-        out = self.vit(x)
+        out = self.vit(x, **kwargs)
         data['pred'] = out
         data['conf'], data['unc'] = pred_to_conf_unc(
             data['pred'], self.loss_fn.activation, False)
@@ -23,7 +23,7 @@ class VitClassifier(nn.Module):
 
     def loss(self, data, epoch, **kwargs):
         pred = data['pred']
-        gt = data['label'].reshape(-1, 1)
+        gt = data['label'].reshape(len(pred), -1)
         total_loss = self.loss_fn(pred, gt, temp=epoch)
         loss_dict = {
             'total_loss': total_loss

@@ -1,3 +1,4 @@
+import json
 import os, sys
 import argparse
 import logging
@@ -39,7 +40,7 @@ class SupervisedRunner:
             self.runner = TrainRunner(dataloader=dataloader,
                                       model=model,
                                       **cfgs['TRAIN'])
-        elif args.mode == 'test':
+        elif args.mode == 'test' or args.mode == 'inference':
             self.runner = TestRunner(dataloader=dataloader,
                                      model=model,
                                      **cfgs['TEST'])
@@ -102,12 +103,16 @@ if __name__ == "__main__":
         cfgs['DATASET']['years'] = args.years
     if args.crop_size is not None:
         cfgs['DATASET']['crop_size'] = args.crop_size
-        if args.mode == "test":
+        if args.mode == "test" or args.mode == "inference":
             cfgs['DATASET']['crop_step_size'] = args.crop_size
     if args.reparse_pseudo_label:
         cfgs['DATASET']['reparse_pseudo_label'] = args.reparse_pseudo_label
     if args.log_to_tensorboard:
         cfgs['TRAIN']['hooks'].append(dict(type="LGLNSegPlotWriterHook", max_n_img=2, log_every=100))
+    if args.load_from is not None:
+        cfgs['TEST']['load_from'] = args.load_from
+
+    print(json.dumps(cfgs, indent=4))
 
     sdl_runner = SupervisedRunner(args, cfgs)
     if args.mode == "train":

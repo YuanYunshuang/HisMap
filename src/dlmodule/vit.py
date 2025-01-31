@@ -10,20 +10,20 @@ from functools import partial
 
 from src.utils.common import to_2tuple
 from src.utils.vit_util import trunc_normal_, DropPath, Mlp, Block, compute_num_patches, DropPatch
-from src.dlmodule.unet import conv3x3
+from src.dlmodule.unet import conv3x3, DownConv
 
 IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
 IMAGENET_INCEPTION_STD = (0.5, 0.5, 0.5)
 
 
-class DownConv(nn.Module):
+class DownConv_(nn.Module):
     """
     A helper Module that performs 2 convolutions and 1 MaxPool.
     A ReLU activation follows each convolution.
     """
 
     def __init__(self, in_channels, out_channels):
-        super(DownConv, self).__init__()
+        super(DownConv_, self).__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -325,7 +325,7 @@ class ConvVitV1(nn.Module):
         num_patches = (img_size // down_ratio) ** 2
         self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, out_channel))
         self.drop_patch = DropPatch(0.2) if drop_patch else None
-        self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=False)
+        self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=True)
         self.cls_token = nn.Parameter(torch.zeros(1, out_channel))
 
         self.norm = norm_layer(out_channel)
@@ -342,7 +342,7 @@ class ConvVitV1(nn.Module):
         B, C, H, W = x.shape
         # tic = timeit.default_timer()
         for blk in self.conv_blocks:
-            x = blk(x)
+            x = blk(x)[0]
         # print('blk:',timeit.default_timer() - tic)
 
         # tic = timeit.default_timer()

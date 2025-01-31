@@ -56,7 +56,7 @@ def generate_dataset_v1(path_in, path_out, mode='train', crop_size=384, num_pixe
             cv2.imwrite(os.path.join(path_out_, f"{patch}_{year}_{x1}_{y1}_{l_cls}.jpg"), M)
 
 
-def generate_dataset_v2(path_in, path_out, mode='train', crop_size=384, num_pixel_present=100, margin=128):
+def generate_dataset_v2(path_in, path_out, mode='train', crop_size=384, num_pixel_present=100, margin=128, add_gray_img=False):
     """
     Split train and test set patch-wise. On each map sheet, the cropped patches are alternately
     saved to the train and test sets.
@@ -109,7 +109,7 @@ def generate_dataset_v2(path_in, path_out, mode='train', crop_size=384, num_pixe
             M = np.pad(M, ((0, crop_size - M.shape[0]), (0, crop_size - M.shape[1]), (0, 0)), mode='constant', constant_values=0)
 
             cv2.imwrite(os.path.join(path_out, f"{patch}_{year}_{x1}_{y1}_{l_cls}_a.jpg"), M)
-            if mode == 'train' and hismap.ndim == 3:
+            if add_gray_img and  mode == 'train' and hismap.ndim == 3:
                 M = cv2.cvtColor(M, cv2.COLOR_BGR2GRAY)[:, :, None].repeat(3, axis=-1)
                 cv2.imwrite(os.path.join(path_out, f"{patch}_{year}_{x1}_{y1}_{l_cls}_b.jpg"), M)
 
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     generate_dataset_v2(
         args.path_in,
         args.path_out,
-        mode='test',
+        mode='train',
         crop_size=args.crop_size,
     )
 

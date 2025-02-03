@@ -121,7 +121,7 @@ def generate_dataset_v3(path_in, path_out, mode='train', crop_size=384, num_pixe
     Only use data before 2000
     """
     if mode == 'test': margin = None
-    if margin is None: margin = crop_size
+    if margin is None or margin==0: margin = crop_size
     label_files = glob.glob(os.path.join(path_in, '*/label/*.png'))
     path_out = os.path.join(path_out, mode)
     os.makedirs(path_out, exist_ok=True)
@@ -164,7 +164,7 @@ def generate_dataset_v3(path_in, path_out, mode='train', crop_size=384, num_pixe
             if M.ndim == 2:
                 M = M[:, :, None].repeat(3, axis=-1)
             M = np.pad(M, ((0, crop_size - M.shape[0]), (0, crop_size - M.shape[1]), (0, 0)), mode='constant', constant_values=0)
-
+            M = cv2.cvtColor(M, cv2.COLOR_BGR2RGB)
             cv2.imwrite(os.path.join(path_out, f"{patch}_{year}_{x1}_{y1}_{l_cls}.jpg"), M)
 
 
@@ -179,6 +179,9 @@ class LglnclsDataset(Dataset):
         self.root_dir = cfgs['data_path']
         self.mode = mode
         self.multi_cls = cfgs.get('multi_cls', False)
+        if not self.multi_cls:
+            assert 'cls_label' in cfgs
+            self.cls_label = cfgs['cls_label']
         label_pattern = cfgs.get('label_pattern', None)
 
         if mode == 'inference':
@@ -216,6 +219,13 @@ class LglnclsDataset(Dataset):
         filename = self.samples[item]
         patch, year, x , y, l = filename.split('.')[0].split('_')[:5]
         img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_UNCHANGED)
+        if self.multi_cls:
+            label = torch.Tensor([int(x) for x in l])
+        else:
+            if self.cls_label < 3 or len(l) == 4:
+                label = int(l[self.cls_label])
+            else:
+                label = int(int(l[3]) or int(l[4]))
 
         data = {
             'patch': patch,
@@ -223,7 +233,7 @@ class LglnclsDataset(Dataset):
             'x': x,
             'y': y,
             'img': img,
-            'label': torch.Tensor([int(x) for x in l]) if self.multi_cls else int(l[0]),
+            'label': label,
         }
         data = self.pipeline(data)
         return data
@@ -266,6 +276,7 @@ if __name__ == '__main__':
         args.path_out,
         mode='train',
         crop_size=args.crop_size,
+        margin=0
     )
 
     # from src.utils.misc import load_yaml

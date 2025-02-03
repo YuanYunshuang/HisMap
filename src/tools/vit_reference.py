@@ -40,7 +40,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--n-workers", type=int)
     parser.add_argument("--visualize", action="store_true")
-    parser.add_argument("--label-pattern", type=str, default="1****")
+    parser.add_argument("--label-pattern", type=str, default="****")
     args = parser.parse_args()
     args.__setattr__('mode', 'inference')
 

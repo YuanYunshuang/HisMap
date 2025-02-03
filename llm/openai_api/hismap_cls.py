@@ -113,7 +113,7 @@ def parse_resonse(response):
 
 if __name__ == '__main__':
     files = sorted(glob.glob("/home/yuan/data/HisMap/LGLN/dataset/llm_label/prompt_img/197x/*.jpg"))
-    start_idx = 759
+    start_idx = 2527
     for i, f in enumerate(files[start_idx:]):
         print(i + start_idx)
         llm_res = {}

@@ -199,7 +199,7 @@ class LglnclsDataset(Dataset):
             else:
                 assert len(label_pattern) == len(self.samples[0].split('_')[-2])
             for sample in self.samples:
-                label = sample.split('_')[-2]
+                label = sample[:-4].split('_')[4]
                 flag = True
                 for pi in [i for i, p in enumerate(label_pattern) if p != '*']:
                     if label[pi] != label_pattern[pi]:

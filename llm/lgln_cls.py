@@ -151,6 +151,24 @@ def stack_images(images, spacing=10):
     return output_image
 
 
+def image_side_by_side(image1, image2):
+    # Get the dimensions of both images
+    width1, height1 = image1.size
+    width2, height2 = image2.size
+
+    # Determine the new height (max of both images) and total width
+    new_height = max(height1, height2)
+    total_width = width1 + width2
+
+    # Create a new blank image with the appropriate size
+    new_image = Image.new('RGB', (total_width, new_height))
+
+    # Paste the two images into the new image
+    new_image.paste(image1, (0, 0))
+    new_image.paste(image2, (width1, 0))
+    return new_image
+
+
 def prepare_prompt_img(sheet_files, out_dir, label, crop_size, scale=1/3):
     os.makedirs(out_dir, exist_ok=True)
     years = []
@@ -190,12 +208,31 @@ def prepare_prompt_img(sheet_files, out_dir, label, crop_size, scale=1/3):
         cv2.imwrite(os.path.join(out_dir, f"{x1}_{y1}.jpg"), img)
 
 
+def prepare_promt_img_with_legend(lendfile, img_dir, out_dir):
+    img_files = glob.glob(f"{img_dir}/*.jpg")
+    image1 = Image.open(lendfile)
+    for img_file in img_files:
+        basename = os.path.basename(img_file)
+        year = basename.split('.')[0].split('_')[1]
+        if not "197" in year:
+            continue
+        image2 = Image.open(img_file)
+        new_image = image_side_by_side(image1, image2)
+        new_image.save(os.path.join(out_dir, os.path.basename(img_file)))
+
+
 
 if __name__ == '__main__':
     # sheet_files, label_files = parse_and_copy_valid_maps(
     #     "/home/yuan/data/HisMap/LGLN/dataset/age_tracing_data",
     #     "/home/yuan/data/HisMap/LGLN/dataset/llm_label"
     # )
+
+    prepare_promt_img_with_legend(
+        "/home/yuan/Downloads/hismap_legend_2.png",
+        "/home/yuan/data/HisMap/LGLN/dataset/attn/train",
+        "/home/yuan/data/HisMap/LGLN/dataset/llm_label/prompt_img/197x"
+    )
 
     path_in = "/home/yuan/data/HisMap/LGLN/dataset/llm_label"
     sheet = 3821

@@ -2,6 +2,7 @@ from openai import OpenAI
 import base64
 import requests
 import os
+import openai
 
 os.environ['OPENAI_API_KEY'] = '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'
 
@@ -9,6 +10,21 @@ os.environ['OPENAI_API_KEY'] = 'sk-proj-1hnTrrhnXTDj75hcsYOy2SvA_8KA9LZTOefZbyw2
 def load_image_to_base64(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
+
+
+# Function to set memory
+def set_memory(user_id, memory_data):
+    response = openai.Memory.create(
+        user_id=user_id,
+        memory=memory_data
+    )
+    return response
+
+
+# Function to retrieve memory
+def get_memory(user_id):
+    response = openai.Memory.retrieve(user_id=user_id)
+    return response
 
 
 client = OpenAI()

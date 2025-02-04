@@ -1,5 +1,12 @@
+import logging
+from typing import List
+import math
+
 from torch.optim import lr_scheduler as torch_lr
 from torch.optim import Optimizer
+
+
+_logger = logging.getLogger(__name__)
 
 
 def build_lr_scheduler(optimizer, cfg, total_iter):
@@ -42,22 +49,9 @@ class LRUpdater:
             # construct a learning rate scheduler
             self.lr_scheduler = torch_lr.MultiStepLR(optimizer, **kwargs)
         elif policy == 'CosineAnnealingWarm':
-            from timm.scheduler.cosine_lr import CosineLRScheduler
-            num_steps = kwargs['epochs'] * total_iter
-            warmup_lr = kwargs['warmup_lr']
-            warmup_steps = kwargs['warmup_epochs'] * total_iter
-            lr_min = kwargs['lr_min']
-            decay_rate = kwargs.get('decay_rate', 0.5)
-
-            self.lr_scheduler = CosineLRScheduler(
-                optimizer,
-                t_initial=num_steps,
-                lr_min=lr_min,
-                warmup_lr_init=warmup_lr,
-                warmup_t=warmup_steps,
-                cycle_limit=1,
-                t_in_epochs=False,
-                cycle_decay=decay_rate
+            from timm.scheduler import create_scheduler_v2
+            self.lr_scheduler, num_epochs = create_scheduler_v2(
+                optimizer, **kwargs
             )
         elif policy == 'TransformerAdaptiveScheduler':
             kwargs['itrs_per_epoch'] = total_iter
@@ -86,7 +80,10 @@ class LRUpdater:
         self.lr_scheduler.load_state_dict(state_dict)
 
     def get_last_lr(self):
-        return self.lr_scheduler.get_last_lr()
+        if self.policy in ['CosineAnnealingWarm',]:
+            return self.optimizer.param_groups[0]["lr"], None
+        else:
+            return self.lr_scheduler.get_last_lr()
 
 
 if __name__=="__main__":

@@ -2,7 +2,23 @@ import os
 import numpy as np
 import torch
 import random
+from itertools import repeat
+import collections.abc
 
+
+def _ntuple(n):
+    def parse(x):
+        if isinstance(x, collections.abc.Iterable) and not isinstance(x, str):
+            return tuple(x)
+        return tuple(repeat(x, n))
+    return parse
+
+
+to_1tuple = _ntuple(1)
+to_2tuple = _ntuple(2)
+to_3tuple = _ntuple(3)
+to_4tuple = _ntuple(4)
+to_ntuple = _ntuple
 
 def prRed(prt): print("\033[91m {}\033[00m" .format(prt))
 def prGreen(prt): print("\033[92m {}\033[00m" .format(prt))
@@ -57,3 +73,20 @@ def seed_all(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
     random.seed(seed)
+
+
+def unpackbits(x, num_bits=8, bitorder='big'):
+    """
+    Unpacks integers into a binary representation.
+
+    Args:
+        x: A torch tensor of integers.
+        num_bits: Number of bits to unpack.
+        bitorder: 'big' or 'little', determining bit order.
+
+    Returns:
+        A tensor of shape x.shape + (num_bits,) with binary representation.
+    """
+    x = x.unsqueeze(-1)
+    mask = 2 ** torch.arange(num_bits - 1, -1, -1, device=x.device) if bitorder == 'big' else 2 ** torch.arange(0, num_bits, device=x.device)
+    return (x & mask).ne(0).to(torch.bool)

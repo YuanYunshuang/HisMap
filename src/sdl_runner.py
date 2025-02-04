@@ -1,3 +1,4 @@
+import json
 import os, sys
 import argparse
 import logging
@@ -39,7 +40,7 @@ class SupervisedRunner:
             self.runner = TrainRunner(dataloader=dataloader,
                                       model=model,
                                       **cfgs['TRAIN'])
-        elif args.mode == 'test':
+        elif args.mode == 'test' or args.mode == 'inference':
             self.runner = TestRunner(dataloader=dataloader,
                                      model=model,
                                      **cfgs['TEST'])
@@ -68,6 +69,11 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", type=str)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--n-workers", type=int)
+    parser.add_argument("--year-range", type=str)
+    parser.add_argument("--years", type=str)
+    parser.add_argument("--crop-size", type=int)
+    parser.add_argument("--reparse-pseudo-label", action="store_true")
+    parser.add_argument("--log-to-tensorboard", action="store_true")
     args = parser.parse_args()
 
     setup_logger(args.run_name, args.debug)
@@ -89,6 +95,24 @@ if __name__ == "__main__":
         cfgs['DATASET']['n_workers'] = args.n_workers
     if args.data_path is not None:
         cfgs['DATASET']['data_path'] = args.data_path
+    if args.year_range is not None:
+        start_year, end_year = args.year_range.split("-")
+        cfgs['DATASET']['start_year'] = int(start_year)
+        cfgs['DATASET']['end_year'] = int(end_year)
+    if args.years is not None:
+        cfgs['DATASET']['years'] = args.years
+    if args.crop_size is not None:
+        cfgs['DATASET']['crop_size'] = args.crop_size
+        if args.mode == "test" or args.mode == "inference":
+            cfgs['DATASET']['crop_step_size'] = args.crop_size
+    if args.reparse_pseudo_label:
+        cfgs['DATASET']['reparse_pseudo_label'] = args.reparse_pseudo_label
+    if args.log_to_tensorboard:
+        cfgs['TRAIN']['hooks'].append(dict(type="LGLNSegPlotWriterHook", max_n_img=2, log_every=100))
+    if args.load_from is not None:
+        cfgs['TEST']['load_from'] = args.load_from
+
+    print(json.dumps(cfgs, indent=4))
 
     sdl_runner = SupervisedRunner(args, cfgs)
     if args.mode == "train":

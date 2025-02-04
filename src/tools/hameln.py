@@ -9,6 +9,15 @@ from src.tools.map_analyzer import read_tiff
 MAP_IDS = [3922, 3921, 3822, 3821]
 YEARS = [2017, 2016, 2012, 2011, 2005, 2002, 1996, 1992, 1986, 1982, 1978, 1974, 1960, 1955, 1952, 1945, 1936, 1925, 1898]
 CATEGORY = ['for']
+HamelnClassDict = {'wat':'Water', 'set':'Settlement', 'for':'Woodland', 'agr':'Agriculture'}
+HamelnClassList = ['wat', 'set', 'for', 'agr']
+color_dict = {
+    'for': [[198, 211, 137]],
+    'wat': [[191, 228, 249]],  # [0, 157, 226],
+    'set': [[247, 187, 164], [226, 0, 14], [211, 211, 210], [116, 115, 106]],
+    'agr': [[254, 252, 233], [231, 239, 211]],
+    'road': [[255, 255, 255], [249, 177, 0], [254, 236, 0]]
+}
 
 
 def generate_dataset(map_dir, raster_dir, out_dir, year, category, img_size=512, overlap=24):
@@ -280,9 +289,86 @@ def label_map_to_rgb(map_dir, out_dir):
         cv2.imwrite(os.path.join(out_dir, os.path.basename(mf)), rbg_img[:, :, ::-1])
 
 
+def remap_label(in_path, out_path=None):
+    label_map = {
+        "agr": {1: "farmland", 2: "meadow", 3: "other", 12: 'grass'},
+        "for": {1: "deciduous", 2: "coniferous", 3: "mixed", 5: "woody"},
+        "wat": {1: "river_harbou_basin", 2: "lakes"},
+        "set": {1: "urban"}
+    }
+    CLASSES = ['Woodland', 'Grassland', 'Settlement', 'FlowingWater', 'StandingWater']
+    out_path = in_path.replace('gt', 'label') if out_path is None else out_path
+    files = sorted(glob(in_path + "/*.tif"))
+    data = {p: {} for p in ['3821', '3822', '3921', '3922']}
+    for f in files:
+        patch, year, cls = os.path.basename(f).split(".")[0].split("_")
+        if patch!= '3922':
+            continue
+        TIF = read_tiff(f)
+        if year not in data[patch]:
+            data[patch][year] = np.zeros((5,) + TIF.shape, dtype=bool)
+        elif data[patch][year].shape[1] < TIF.shape[0] or data[patch][year].shape[2] < TIF.shape[1]:
+            data[patch][year] = np.pad(data[patch][year], ((0, 0),
+                                             (0, TIF.shape[0] - data[patch][year].shape[1]),
+                                             (0, TIF.shape[1] - data[patch][year].shape[2])),
+                                       mode='constant', constant_values=0)
+
+        if cls == 'agr':
+            name = 'Grassland'
+            label = CLASSES.index(name)
+            mask = TIF == 2
+            data[patch][year][label, :mask.shape[0], :mask.shape[1]] = mask
+        elif cls == 'for':
+            name = 'Woodland'
+            label = CLASSES.index(name)
+            mask = TIF < 255
+            data[patch][year][label, :mask.shape[0], :mask.shape[1]] = mask
+        elif cls == 'wat':
+            name = 'FlowingWater'
+            label = CLASSES.index(name)
+            mask = TIF == 1
+            data[patch][year][label, :mask.shape[0], :mask.shape[1]] = mask
+            name = 'StandingWater'
+            label = CLASSES.index(name)
+            mask = TIF == 2
+            data[patch][year][label, :mask.shape[0], :mask.shape[1]] = mask
+        elif cls == 'set':
+            name = 'Settlement'
+            label = CLASSES.index(name)
+            mask = TIF == 1
+            data[patch][year][label, :mask.shape[0], :mask.shape[1]] = mask
+
+    for patch, labels in data.items():
+        for year, label in labels.items():
+            remapped_label = np.zeros_like(label[0]).astype(np.uint8)
+            for i, l in enumerate(label):
+                remapped_label[l] = (i + 1) * 50
+            cv2.imwrite(os.path.join(out_path, f"{patch}_{year}.png"), remapped_label)
+
+def compare_labels():
+    img1 = cv2.imread("/home/yuan/data/out/LGLN2023/all/epoch20/holistic_seg_result/3922_1974.png", cv2.IMREAD_UNCHANGED)[::2, ::2] / 50
+    img2 = cv2.imread("/home/yuan/data/HisMap/LGLN/dataset/test/label/3922_1974.png", cv2.IMREAD_UNCHANGED)[::2, ::2] / 50
+    w, h = max(img1.shape[0], img2.shape[0]), max(img1.shape[1], img2.shape[1])
+
+    # img1 = read_tiff("/home/yuan/data/HisMap/LGLN/dataset/train/gt2023/3821_2023_agr.tif")[::2, ::2]
+    # img1 = ((img1 > 1) & (img1 < 255))
+    #
+    # img = np.stack([img1 * 255, (img2 == 2) * 255, np.zeros_like(img1).astype(np.uint8)], 2)
+    # cv2.imwrite(f"/home/yuan/data/HisMap/LGLN/dataset/train/tmp/3821_{2}.png", img)
+
+    for i in range(1, 6):
+        img = np.zeros((w, h, 3)).astype(np.uint8)
+        img1m = (img1==i) * 255
+        img[:img1.shape[0], :img1.shape[1], 0] = img1m
+        img2m = (img2==i) * 255
+        img[:img2.shape[0], :img2.shape[1], 1] = img2m
+        cv2.imwrite(f"/home/yuan/data/HisMap/LGLN/dataset/train/tmp/3922_{i}.png", img)
+
+
 if __name__=="__main__":
-    # path = "/home/yuan/data/HisMap/Hameln"
-    path = "/media/yuan/luna/data/HisMAP/Hameln"
+    # compare_labels()
+    remap_label("/home/yuan/data/HisMap/LGLN/dataset/train/gt2023",
+                "/home/yuan/data/HisMap/LGLN/dataset/3922_label_2023")
 
     # label_map_to_rgb(
     #     "/home/yuan/data/HisMap/Hameln/raster_rec",
@@ -299,12 +385,12 @@ if __name__=="__main__":
     #     None,
     # )
 
-    generate_4cls_softpseudo_labels(
-        f"{path}/exp_0.5/seg4cls_all/epoch50/holistic_seg_result",
-        f"{path}/seg4cls_train_soft/gt_pseudo_2016_2017",
-        ['agr', 'for', 'wat', 'set'],
-        years=['2016', '2017']
-    )
+    # generate_4cls_softpseudo_labels(
+    #     f"{path}/exp_0.5/seg4cls_all/epoch50/holistic_seg_result",
+    #     f"{path}/seg4cls_train_soft/gt_pseudo_2016_2017",
+    #     ['agr', 'for', 'wat', 'set'],
+    #     years=['2016', '2017']
+    # )
 
     # extract_color_mask(
     #     "/home/data/HisMAP/Hameln/TK_projektiv_entzerrt_1m",
@@ -314,13 +400,6 @@ if __name__=="__main__":
     # )
 
     # tiff_to_png("/home/data/HisMAP/Hameln/Raster_2023")
-    color_dict = {
-        'for': [[198, 211, 137]],
-        'wat': [[191, 228, 249]],  # [0, 157, 226],
-        'set': [[247, 187, 164], [226, 0, 14], [211, 211, 210], [116, 115, 106]],
-        'agr': [[254, 252, 233], [231, 239, 211]],
-        'road': [[255, 255, 255], [249, 177, 0], [254, 236, 0]]
-    }
 
 
     # for k, v in color_dict.items():

@@ -242,6 +242,9 @@ def boundary_to_vector(map_file, kernel_size=5):
 
 
 def read_tiff(filename):
+    if not os.path.exists(filename):
+        print('File not found: {}'.format(filename))
+        return None
     geo_tiff = GeoTiff(filename)
     tiff_array = np.array(geo_tiff.read())
     return tiff_array

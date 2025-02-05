@@ -484,10 +484,9 @@ class ConvVitMultiCls(nn.Module):
 
 class PatchConv(nn.Module):
     def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=2, norm_layer=nn.LayerNorm,
-                 drop_patch=False, patch_size=32, **kwargs):
+                 drop_patch=False, patch_size=128, **kwargs):
         super().__init__()
         self.patch_size = patch_size
-        print(patch_size)
         blocks = []
         for _ in range(depth):
             out_dim = max(16, in_channel * 2)

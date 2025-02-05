@@ -484,8 +484,10 @@ class ConvVitMultiCls(nn.Module):
 
 class PatchConv(nn.Module):
     def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=2, norm_layer=nn.LayerNorm,
-                 drop_patch=False, **kwargs):
+                 drop_patch=False, patch_size=32, **kwargs):
         super().__init__()
+        self.patch_size = patch_size
+        print(patch_size)
         blocks = []
         for _ in range(depth):
             out_dim = max(16, in_channel * 2)
@@ -516,7 +518,7 @@ class PatchConv(nn.Module):
 
     def forward_features(self, x, **kwargs):
         B, C, H, W = x.shape
-        n = 64 # patch size
+        n = self.patch_size # patch size
         Hn, Wn = H // n, W // n
         patches = x.unfold(2, n, n).unfold(3, n, n) # Shape: (B, C, H/n, W/n, n, n)
         patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()  # (B, H/n, W/n, C, n, n)

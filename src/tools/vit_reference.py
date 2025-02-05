@@ -61,7 +61,7 @@ if __name__ == "__main__":
     os.makedirs(f'{log_dir}/inference', exist_ok=True)
 
     # Initialize modules
-    dataloader = get_dataloader(cfgs['DATASET'], 'inference')
+    dataloader = get_dataloader(cfgs['DATASET'], 'test')
     cfgs['MODEL']['mode'] = args.mode
     model = get_model(cfgs['MODEL'])
     ckpt_dict = torch.load(args.load_from, weights_only=False)
@@ -115,8 +115,6 @@ if __name__ == "__main__":
                 # s = int(math.sqrt(attn.shape[-1]))
                 # attn = attn.reshape(-1, s, s)
                 if args.visualize and n == n_patches - 1:
-                    fig = plt.figure(figsize=(16, 4))
-                    axs = fig.subplots(1, 4)
                     for i, (patch, year, x, y, img, conf, label) in enumerate(zip(
                             out_dict['patch'],
                             out_dict['year'],
@@ -126,12 +124,14 @@ if __name__ == "__main__":
                             out_dict['conf'],
                             out_dict['label']
                     )):
-                        if i >= 4: break
+                        fig = plt.figure(figsize=(4, 4))
+                        ax = fig.subplots(1, 1)
                         img = img.cpu().numpy().transpose(1, 2, 0) * 0.5 + 0.5
-                        draw_attn_on_img(img[::2, ::2], patch_drop_mask[i], axs[i], title=f'{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}')
-                    plt.tight_layout()
-                    plt.savefig(f'{log_dir}/imgs/{cnt}.jpg')
-                    plt.close()
+                        draw_attn_on_img(img[::2, ::2], patch_drop_mask[i], ax)
+                        ax.axis('off')
+                        plt.tight_layout()
+                        plt.savefig(f'{log_dir}/imgs/{patch}_{year}_{x}_{y}_{conf[1]:.2f}_{label:1d}.jpg')
+                        plt.close()
             cnt += 1
 
             for i, name in enumerate(res_names):

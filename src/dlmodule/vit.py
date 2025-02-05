@@ -487,7 +487,6 @@ class PatchConv(nn.Module):
                  drop_patch=False, patch_size=128, **kwargs):
         super().__init__()
         self.patch_size = patch_size
-        print(patch_size)
         blocks = []
         for _ in range(depth):
             out_dim = max(16, in_channel * 2)

@@ -50,7 +50,7 @@ def stich_attn_maps(path, x, y, step=384, n_step=5):
     cv2.imwrite(f"{path}.jpg", images)
 
 
-def cal_iou(path, label_file, fg_label=0, cls_name=''):
+def cal_iou_upsample(path, label_file, fg_label=0, cls_name=''):
     """
         cal_iou(
         "/home/yuan/data/out/hismap_attn/wood_ep100",
@@ -113,6 +113,62 @@ def cal_iou(path, label_file, fg_label=0, cls_name=''):
         print("Thr | IoU | Prec | Rec:", f"{thr * 0.1:.1f} | {iou:.4f} | {precision:.4f} | {recall:.4f}")
     save_json(res, f"{path}/res_{cls_name}.json")
 
+
+def cal_iou_downsample(path, label_file, fg_label=0, cls_name=''):
+    """
+        cal_iou(
+        "/home/yuan/data/out/hismap_attn/wood_ep100",
+        "/home/yuan/data/HisMap/LGLN/dataset/age_tracing_data/test/label/3922_1974.png",
+        fg_label=1, cls_name='wood'
+    )
+    """
+    label = cv2.imread(label_file, cv2.IMREAD_UNCHANGED) // 50
+    label = label == fg_label
+    H, W = label.shape[:2]
+    pred = []
+    labels = []
+    img_size = 384
+
+    for h in range(0, H, img_size):
+        for w in range(0, W, img_size):
+            json_file = os.path.join(path, 'inference', f"3922_1974_{w}_{h}.json")
+            data = load_json(json_file)
+
+            attn_ = np.array(data['attn'])
+            attn = np.zeros_like(attn_)
+            for i, idx in enumerate(data['idx']):
+                attn[idx] = attn_[i]
+            attn_size = int(math.sqrt(attn.shape[0]))
+            attn = attn.reshape(attn_size, attn_size)
+            h2 = min(h + img_size, H)
+            w2 = min(w + img_size, W)
+            L = label[h:h2, w:w2]
+            L = np.pad(L, pad_width=((0, img_size-L.shape[0]), (0, img_size-L.shape[1])),
+                       constant_values=False, mode='constant')
+            L = L.reshape(6, 64, 6, 64).swapaxes(1, 2).reshape(6, 6, 64*64)
+            L = L.sum(axis=-1) > 1
+
+            pred.append(attn)
+            labels.append(L)
+
+    s = 11188
+    labels = np.stack(labels, axis=0)
+    pred = np.stack(pred, axis=0)
+    res = []
+    for thr in range(0, 10):
+        pred_mask = pred > (thr * 0.1)
+        tp = np.logical_and(labels, pred_mask).sum()
+        fp = np.logical_and(np.logical_not(labels), pred_mask).sum()
+        fn = np.logical_and(np.logical_not(pred_mask), labels).sum()
+        union = np.logical_or(labels, pred_mask).sum()
+        iou = tp / union
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        res.append([thr * 0.1, iou, precision, recall])
+        print("Thr | IoU | Prec | Rec:", f"{thr * 0.1:.1f} | {iou:.4f} | {precision:.4f} | {recall:.4f}")
+    save_json(res, f"{path}/res_{cls_name}.json")
+
+
 def plot_iou_prec(path_dict, out_file):
     """
         plot_iou_prec(
@@ -174,10 +230,10 @@ def crop_quadrant(path, quadrant=1):
 
 if __name__ == '__main__':
     pass
-    # cal_iou(
-    #     "/home/yuan/data/out/hismap_attn/settlement_p64",
-    #     "/home/yuan/data/HisMap/LGLN/dataset/age_tracing_data/test/label/3922_1974.png",
-    #     fg_label=3, cls_name='settlement'
+    # cal_iou_downsample(
+    #     "/home/yys/Downloads/wood",
+    #     "/home/yys/Downloads/3922_1974.png",
+    #     fg_label=1, cls_name='wood'
     # )
 
     # cal_iou(
@@ -186,13 +242,13 @@ if __name__ == '__main__':
     #     fg_label=1, cls_name='wood'
     # )
 
-    # plot_iou_prec(
-    #     {
-    #         "Wood": "/home/yuan/data/out/hismap_attn/wood_ep100/res_wood.json",
-    #         "Settlement": "/home/yuan/data/out/hismap_attn/settlement_p64/res_settlement.json"
-    #     },
-    #     "/home/yuan/Downloads/iou_prec.pdf"
-    # )
+    plot_iou_prec(
+        {
+            "Wood": "/home/yys/Downloads/wood/res_wood.json",
+            "Settlement": "/home/yys/Downloads/settlement/res_settlement.json"
+        },
+        "/home/yys/Downloads/iou_prec_downx.pdf"
+    )
 
-    rezize_img("/home/yuan/data/HisMap/LGLN/dataset/3821_1974.tif", ratio=0.4)
+    # rezize_img("/home/yuan/data/HisMap/LGLN/dataset/3821_1974.tif", ratio=0.4)
     # crop_quadrant("/home/yuan/data/HisMap/LGLN/dataset/3821_1974_0.jpg", quadrant=1)

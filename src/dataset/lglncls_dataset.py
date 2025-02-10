@@ -179,6 +179,7 @@ class LglnclsDataset(Dataset):
         self.root_dir = cfgs['data_path']
         self.mode = mode
         self.multi_cls = cfgs.get('multi_cls', False)
+        self.label_error = cfgs.get('label_error', 0.0)
         if not self.multi_cls:
             assert 'cls_label' in cfgs
             self.cls_label = cfgs['cls_label']
@@ -208,6 +209,7 @@ class LglnclsDataset(Dataset):
                 if flag:
                     samples.append(sample)
             self.samples = samples
+        self.invert_label = np.random.random(len(self.samples)) < self.label_error
         pl_name = 'train' if mode == 'train' else 'test'
         self.pipeline = Pipeline(cfgs[f'{pl_name}_pipeline'])
 
@@ -226,6 +228,8 @@ class LglnclsDataset(Dataset):
                 label = int(l[self.cls_label])
             else:
                 label = int(int(l[3]) or int(l[4]))
+            if self.invert_label[item]:
+                label = 1 - label
 
         data = {
             'patch': patch,
@@ -263,6 +267,14 @@ if __name__ == '__main__':
     parser.add_argument("--crop-size", type=int, default=384)
     args = parser.parse_args()
 
+    generate_dataset_v1(
+        args.path_in,
+        args.path_out,
+        mode='test',
+        crop_size=args.crop_size,
+        margin=384
+    )
+
     # for mode in ['train', 'test']:
     #     generate_dataset_v2(
     #         args.path_in,
@@ -271,13 +283,13 @@ if __name__ == '__main__':
     #         crop_size=args.crop_size,
     #     )
 
-    generate_dataset_v3(
-        args.path_in,
-        args.path_out,
-        mode='train',
-        crop_size=args.crop_size,
-        margin=0
-    )
+    # generate_dataset_v3(
+    #     args.path_in,
+    #     args.path_out,
+    #     mode='train',
+    #     crop_size=args.crop_size,
+    #     margin=0
+    # )
 
     # from src.utils.misc import load_yaml
     # cfg = load_yaml('../config/cvit/demo.yaml')

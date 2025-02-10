@@ -482,6 +482,77 @@ class ConvVitMultiCls(nn.Module):
         return ce_logits
 
 
+class PatchConv(nn.Module):
+    def __init__(self, img_size=384, in_channel=3, out_channel=512, depth=6, num_classes=2, norm_layer=nn.LayerNorm,
+                 drop_patch=False, patch_size=128, **kwargs):
+        super().__init__()
+        self.patch_size = patch_size
+        blocks = []
+        for _ in range(depth):
+            out_dim = max(16, in_channel * 2)
+            blocks.append(DownConv(in_channel, out_dim))
+            in_channel = out_dim
+        self.conv_blocks = nn.Sequential(*blocks)
+        self.proj_conv = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=1),
+            nn.ReLU(inplace=True),
+        )
+
+        down_ratio = 2 ** depth
+        num_patches = (img_size // down_ratio) ** 2
+        self.pos_embed = nn.Parameter(torch.zeros(1, 1 + num_patches, out_channel))
+        self.drop_patch = DropPatch(0.2) if drop_patch else None
+        self.cross_attn = CrossAttention(out_channel, num_heads=1, qkv_bias=True)
+        self.cls_token = nn.Parameter(torch.zeros(1, out_channel))
+
+        self.norm = norm_layer(out_channel)
+        self.head = nn.Linear(out_channel, num_classes)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        out = {'cls_token'}
+        if self.pos_embed[0].requires_grad:
+            out.add('pos_embed')
+        return out
+
+    def forward_features(self, x, **kwargs):
+        B, C, H, W = x.shape
+        n = self.patch_size # patch size
+        Hn, Wn = H // n, W // n
+        patches = x.unfold(2, n, n).unfold(3, n, n) # Shape: (B, C, H/n, W/n, n, n)
+        patches = patches.permute(0, 2, 3, 1, 4, 5).contiguous()  # (B, H/n, W/n, C, n, n)
+        patches = patches.view(B * Hn * Wn, C, n, n)
+        # tic = timeit.default_timer()
+        for blk in self.conv_blocks:
+            patches = blk(patches)[0]
+        # print('blk:',timeit.default_timer() - tic)
+
+
+        x = self.proj_conv(patches)
+        b, c, h, w = x.shape
+        x = x.view(B, Hn, Wn, c, h, w)
+        x = x.permute(0, 3, 1, 4, 2, 5).contiguous() # (B, C, H/n, h, W/n, w)
+        x = x.view(B, c, Hn*h, Wn*w).view(B, c, Hn*h*Wn*w).permute(0, 2, 1).contiguous()
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+        # print('proj:', timeit.default_timer() - tic)
+
+        # tic = timeit.default_timer()
+        if self.drop_patch:
+            x = self.drop_patch(x, kwargs.get('drop_patch_mask', None))
+        x = self.cross_attn(x)
+        # print('cross_attn:', timeit.default_timer() - tic)
+        out = self.norm(x)[:, 0]
+
+        return out
+
+    def forward(self, x, **kwargs):
+        x = self.forward_features(x, **kwargs)
+        ce_logits = self.head(x)
+        return ce_logits
+
+
 def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
@@ -527,5 +598,10 @@ def crossvit_conv_384_v1(**kwargs):
 
 def crossvit_conv_384_multi_cls(**kwargs):
     model = ConvVitMultiCls(**kwargs)
+    model.default_cfg = _cfg()
+    return model
+
+def crossvit_patch_conv_384(**kwargs):
+    model = PatchConv(**kwargs)
     model.default_cfg = _cfg()
     return model

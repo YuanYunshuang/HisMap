@@ -4,4 +4,4 @@ src/model
 *__pycache__*
 data
 logs
-*.pth
+map_sam/ckpt

@@ -5,3 +5,4 @@ src/model
 data
 logs
 map_sam/ckpts
+map_sam/work_dir

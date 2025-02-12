@@ -91,13 +91,13 @@ def remove_empty(path):
             os.path.join(path.replace('gts', 'imgs'), f), "r", allow_pickle=True
         )
         ids = np.unique(data)[1:]
-        if len(ids) == 0:
+        if img.shape[0] != 1024 or img.shape[1] != 1024 or data.shape[0] != 1024 or data.shape[1] != 1024:
             os.remove(os.path.join(path, f))
-            cv2.imshow('tmp', img)
-            cv2.waitKey()
-            cv2.destroyWindow('tmp')
-            print(f)
-            print(np.unique(data))
+            # cv2.imshow('tmp', img)
+            # cv2.waitKey()
+            # cv2.destroyWindow('tmp')
+            # print(f)
+            # print(np.unique(data))
 
 
 if __name__ == '__main__':

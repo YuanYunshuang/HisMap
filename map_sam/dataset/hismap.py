@@ -1,12 +1,12 @@
-import numpy as np
 import os
-
-join = os.path.join
-import torch
-from torch.utils.data import Dataset, DataLoader
-
 import random
 import glob
+join = os.path.join
+
+import torch
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import cv2
 
 
 class MapDataset(Dataset):
@@ -15,7 +15,7 @@ class MapDataset(Dataset):
         self.gt_path = join(data_root, "gts")
         self.img_path = join(data_root, "imgs")
         self.gt_path_files = sorted(
-            glob.glob(join(self.gt_path, "**/*.npy"), recursive=True)
+            glob.glob(join(self.gt_path, "*.npy"), recursive=True)
         )
         self.gt_path_files = [
             file
@@ -31,7 +31,7 @@ class MapDataset(Dataset):
     def __getitem__(self, index):
         # load npy image (1024, 1024, 3), [0,1]
         img_name = os.path.basename(self.gt_path_files[index])
-        img_1024 = np.load(
+        img_1024 = cv2.imread(
             join(self.img_path, img_name), "r", allow_pickle=True
         )  # (1024, 1024, 3)
         # convert the shape to (3, H, W)

@@ -30,6 +30,13 @@ def resize_tiffs(dirname, ratio=1.0):
         cv2.imwrite(os.path.join(output_dir, filename.replace('tif', 'png')), img)
 
 
+def norm_img(img):
+    img = (img - img.min()) / np.clip(
+        img.max() - img.min(), a_min=1e-8, a_max=None
+    )  # normalize to [0, 1], (H, W, 3)
+    return img
+
+
 def generate_train_data(root_dir, size=1024, margin=512):
     gt_dir = os.path.join(root_dir, 'labels_man')
     img_dir = os.path.join(root_dir, 'tifs')
@@ -47,6 +54,8 @@ def generate_train_data(root_dir, size=1024, margin=512):
             continue
 
         img = read_tiff(img_file)
+        if img.ndim == 2:
+            img = img[..., None].repeat(3, axis=-1)
         label = cv2.imread(os.path.join(gt_dir, f), cv2.IMREAD_GRAYSCALE)
         H, W = label.shape[:2]
 
@@ -59,8 +68,10 @@ def generate_train_data(root_dir, size=1024, margin=512):
             x, y = xy
             img_crop = img[x:x + size, y:y + size]
             label_crop = label[x:x + size, y:y + size]
-            cv2.imwrite(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.png'), img_crop)
-            cv2.imwrite(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.png'), label_crop)
+            np.save(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.npy'), img_crop)
+            np.save(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.npy'), label_crop)
+            # cv2.imwrite(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.png'), img_crop)
+            # cv2.imwrite(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.png'), label_crop)
 
 
 if __name__ == '__main__':

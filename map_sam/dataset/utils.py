@@ -72,12 +72,28 @@ def generate_train_data(root_dir, size=1024, margin=512):
             label_crop = label[x:x + size, y:y + size]
             if np.sum(label_crop > 0) < 100:
                 continue
+            unique_ids = np.unique(label_crop)[1:]
+            if len(unique_ids) == 0:
+                continue
             np.save(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.npy'), img_crop)
             np.save(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.npy'), label_crop)
             # cv2.imwrite(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.png'), img_crop)
             # cv2.imwrite(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.png'), label_crop)
 
 
+def remove_empty(path):
+    gt_files = os.listdir(path)
+    for f in gt_files:
+        data = np.load(
+            os.path.join(path, f), "r", allow_pickle=True
+        )
+        ids = np.unique(data)[1:]
+        if len(ids) == 0:
+            os.remove(os.path.join(path, f))
+            print(f)
+
+
 if __name__ == '__main__':
     # resize_tiffs('/home/yuan/data/HisMap/MapSAM/tifs', ratio=0.1)
-    generate_train_data('/home/yuan/data/HisMap/MapSAM')
+    remove_empty('/home/yuan/data/HisMap/MapSAM/train/gts')
+    # generate_train_data('/home/yuan/data/HisMap/MapSAM')

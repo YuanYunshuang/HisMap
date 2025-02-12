@@ -54,7 +54,7 @@ def generate_train_data(root_dir, size=1024, margin=512):
         ys = np.arange(0, W, margin)
         xs[-1] = H - size
         ys[-1] = W - size
-        xys = np.stack(np.meshgrid(xs, ys), axis=-1)
+        xys = np.stack(np.meshgrid(xs, ys), axis=-1).reshape(-1, 2)
         for xy in xys:
             x, y = xy
             img_crop = img[x:x + size, y:y + size]

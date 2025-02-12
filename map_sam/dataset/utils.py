@@ -56,7 +56,7 @@ def generate_train_data(root_dir, size=1024, margin=512):
         img = read_tiff(img_file)
         if img.ndim == 2:
             img = img[..., None].repeat(3, axis=-1)
-        label = cv2.imread(os.path.join(gt_dir, f), cv2.IMREAD_GRAYSCALE)
+        label = cv2.imread(os.path.join(gt_dir, f), cv2.IMREAD_GRAYSCALE) // 50
         H, W = label.shape[:2]
 
         xs = np.arange(0, H, margin)

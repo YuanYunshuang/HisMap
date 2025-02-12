@@ -87,9 +87,15 @@ def remove_empty(path):
         data = np.load(
             os.path.join(path, f), "r", allow_pickle=True
         )
+        img = np.load(
+            os.path.join(path.replace('gts', 'imgs'), f), "r", allow_pickle=True
+        )
         ids = np.unique(data)[1:]
         if len(ids) == 0:
             os.remove(os.path.join(path, f))
+            cv2.imshow('tmp', img)
+            cv2.waitKey()
+            cv2.destroyWindow('tmp')
             print(f)
             print(ids)
 

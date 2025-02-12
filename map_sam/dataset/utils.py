@@ -30,5 +30,31 @@ def resize_tiffs(dirname, ratio=1.0):
         cv2.imwrite(os.path.join(output_dir, filename.replace('tif', 'png')), img)
 
 
+def generate_train_data(root_dir, size=1024, margin=512):
+    gt_dir = os.path.join(root_dir, 'labels_man')
+    img_dir = os.path.join(root_dir, 'tifs')
+
+    gt_files = os.listdir(gt_dir)
+
+    output_dir = os.path.join(root_dir, 'train')
+    os.makedirs(os.path.join(output_dir, 'imgs'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'gts'), exist_ok=True)
+
+    for f in gt_files:
+        name = f.split('.')[0]
+        img_file = os.path.join(img_dir, name + '.tif')
+        if not os.path.exists(img_file):
+            continue
+
+        img = read_tiff(img_file)
+        label = cv2.imread(os.path.join(gt_dir, f), cv2.IMREAD_GRAYSCALE)
+        H, W = label.shape[:2]
+
+        xs = np.arange(0, H, margin)
+        ys = np.arange(0, W, margin)
+        xs[-1] = H - size
+
+
+
 if __name__ == '__main__':
     resize_tiffs('/home/yuan/data/HisMap/MapSAM/tifs', ratio=0.1)

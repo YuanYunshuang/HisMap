@@ -54,6 +54,7 @@ def generate_train_data(root_dir, size=1024, margin=512):
             continue
 
         img = read_tiff(img_file)
+        img = norm_img(img)
         if img.ndim == 2:
             img = img[..., None].repeat(3, axis=-1)
         label = cv2.imread(os.path.join(gt_dir, f), cv2.IMREAD_GRAYSCALE) // 50

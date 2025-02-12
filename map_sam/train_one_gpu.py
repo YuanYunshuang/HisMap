@@ -59,7 +59,7 @@ def show_box(box, ax):
 
 
 # %% sanity test of dataset class
-tr_dataset = MapDataset("data/npy/CT_Abd")
+tr_dataset = MapDataset('/home/yuan/data/HisMap/MapSAM/train')
 tr_dataloader = DataLoader(tr_dataset, batch_size=8, shuffle=True)
 for step, (image, gt, bboxes, names_temp) in enumerate(tr_dataloader):
     print(image.shape, gt.shape, bboxes.shape)
@@ -91,7 +91,7 @@ parser.add_argument(
     "-i",
     "--tr_npy_path",
     type=str,
-    default="data/npy/CT_Abd",
+    default="/home/yuan/data/HisMap/MapSAM/train",
     help="path to training npy files; two subfolders: gts and imgs",
 )
 parser.add_argument("-task_name", type=str, default="MedSAM-ViT-B")

@@ -53,8 +53,16 @@ def generate_train_data(root_dir, size=1024, margin=512):
         xs = np.arange(0, H, margin)
         ys = np.arange(0, W, margin)
         xs[-1] = H - size
-
+        ys[-1] = W - size
+        xys = np.stack(np.meshgrid(xs, ys), axis=-1)
+        for xy in xys:
+            x, y = xy
+            img_crop = img[x:x + size, y:y + size]
+            label_crop = label[x:x + size, y:y + size]
+            cv2.imwrite(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.png'), img_crop)
+            cv2.imwrite(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.png'), label_crop)
 
 
 if __name__ == '__main__':
-    resize_tiffs('/home/yuan/data/HisMap/MapSAM/tifs', ratio=0.1)
+    # resize_tiffs('/home/yuan/data/HisMap/MapSAM/tifs', ratio=0.1)
+    generate_train_data('/home/yuan/data/HisMap/MapSAM')

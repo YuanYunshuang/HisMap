@@ -24,6 +24,8 @@ from datetime import datetime
 import shutil
 import glob
 
+from dataset.hismap import MapDataset
+
 # set seeds
 torch.manual_seed(2023)
 torch.cuda.empty_cache()
@@ -57,7 +59,7 @@ def show_box(box, ax):
 
 
 # %% sanity test of dataset class
-tr_dataset = NpyDataset("data/npy/CT_Abd")
+tr_dataset = MapDataset("data/npy/CT_Abd")
 tr_dataloader = DataLoader(tr_dataset, batch_size=8, shuffle=True)
 for step, (image, gt, bboxes, names_temp) in enumerate(tr_dataloader):
     print(image.shape, gt.shape, bboxes.shape)
@@ -231,7 +233,7 @@ def main():
     iter_num = 0
     losses = []
     best_loss = 1e10
-    train_dataset = NpyDataset(args.tr_npy_path)
+    train_dataset = MapDataset(args.tr_npy_path)
 
     print("Number of training samples: ", len(train_dataset))
     train_dataloader = DataLoader(

@@ -91,6 +91,7 @@ def remove_empty(path):
         if len(ids) == 0:
             os.remove(os.path.join(path, f))
             print(f)
+            print(ids)
 
 
 if __name__ == '__main__':

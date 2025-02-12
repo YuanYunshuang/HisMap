@@ -45,7 +45,8 @@ class MapDataset(Dataset):
         assert img_name == os.path.basename(self.gt_path_files[index]), (
             "img gt name error" + self.gt_path_files[index] + self.npy_files[index]
         )
-        label_ids = np.unique(gt).tolist().remove(0)
+        label_ids = np.unique(gt).tolist()
+        label_ids.remove(0)
         gt2D = np.uint8(
             gt == random.choice(label_ids)
         )  # only one label, (256, 256)

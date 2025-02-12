@@ -97,7 +97,7 @@ def remove_empty(path):
             cv2.waitKey()
             cv2.destroyWindow('tmp')
             print(f)
-            print(ids)
+            print(np.unique(data))
 
 
 if __name__ == '__main__':

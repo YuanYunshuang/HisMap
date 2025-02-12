@@ -46,9 +46,9 @@ class MapDataset(Dataset):
             "img gt name error" + self.gt_path_files[index] + self.npy_files[index]
         )
         label_ids = np.unique(gt)[1:]
-                gt2D = np.uint8(
-                    gt == random.choice(label_ids.tolist())
-                )  # only one label, (256, 256)
+        gt2D = np.uint8(
+            gt == random.choice(label_ids.tolist())
+        )  # only one label, (256, 256)
 
         assert np.max(gt2D) == 1 and np.min(gt2D) == 0.0, "ground truth should be 0, 1"
         y_indices, x_indices = np.where(gt2D > 0)

@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import tqdm
 from geotiff import GeoTiff
 import cv2
 
@@ -47,7 +48,7 @@ def generate_train_data(root_dir, size=1024, margin=512):
     os.makedirs(os.path.join(output_dir, 'imgs'), exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'gts'), exist_ok=True)
 
-    for f in gt_files:
+    for f in tqdm.tqdm(gt_files):
         name = f.split('.')[0]
         img_file = os.path.join(img_dir, name + '.tif')
         if not os.path.exists(img_file):
@@ -69,6 +70,8 @@ def generate_train_data(root_dir, size=1024, margin=512):
             x, y = xy
             img_crop = img[x:x + size, y:y + size]
             label_crop = label[x:x + size, y:y + size]
+            if np.sum(label_crop > 0) < 100:
+                continue
             np.save(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.npy'), img_crop)
             np.save(os.path.join(output_dir, 'gts', f'{name}_{x}_{y}.npy'), label_crop)
             # cv2.imwrite(os.path.join(output_dir, 'imgs', f'{name}_{x}_{y}.png'), img_crop)

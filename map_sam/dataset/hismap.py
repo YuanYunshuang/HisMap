@@ -31,7 +31,7 @@ class MapDataset(Dataset):
     def __getitem__(self, index):
         # load npy image (1024, 1024, 3), [0,1]
         img_name = os.path.basename(self.gt_path_files[index])
-        img_1024 = cv2.imread(
+        img_1024 = np.load(
             join(self.img_path, img_name), "r", allow_pickle=True
         )  # (1024, 1024, 3)
         # convert the shape to (3, H, W)

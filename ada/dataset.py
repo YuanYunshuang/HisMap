@@ -7,8 +7,10 @@ import torch
 import numpy as np
 from geotiff import GeoTiff
 from torch.utils.data import Dataset
-from torchvision.transforms import v2
-import torchvision.transforms.functional as F
+try:
+    from torchvision.transforms import v2
+except:
+    pass
 
 
 class MapDataset(Dataset):
@@ -126,6 +128,16 @@ def generate_source_dataset(path_in, path_out, scale=1.0, img_size=1024, margin=
             cv2.imwrite(os.path.join(path_out, 'lbls', f'{name}_{xy[0]}_{xy[1]}.png'), lbl)
 
 
+def generate_annotation_data(path_in, path_out, scale=1.0, img_size=1024):
+    img = read_tiff("/home/data/HisMAP/Hameln/TK_projektiv_entzerrt_1m/3821_1898.tif")
+    name = "3821_1898"
+    H, W = img.shape[0], img.shape[1]
+    for x in range(0, W, img_size):
+        for y in range(0, H, img_size):
+            img_crop = img[y:y + img_size, x:x + img_size]
+            cv2.imwrite(os.path.join(path_out, f'{name}_{x}_{y}.png'), img_crop)
+
+
 def get_dataloader(root_dir, batch_size=4, mode='train'):
     dataset = MapDataset(root_dir)
     dataloader = torch.utils.data.DataLoader(dataset,
@@ -141,13 +153,19 @@ def get_dataloader(root_dir, batch_size=4, mode='train'):
 
 if __name__ == '__main__':
     # 1. Generate pre-training dataset
-    generate_source_dataset(
-        "/home/yuan/data/HisMap/LGLN/dataset/train",
-        "/home/yuan/data/HisMap/ADA/pre_train",
-        1.0
-    )
-    #
+    # generate_source_dataset(
+    #     "/home/yuan/data/HisMap/LGLN/dataset/train",
+    #     "/home/yuan/data/HisMap/ADA/pre_train",
+    #     1.0
+    # )
+
     # 2. Test dataset
     # dataloader = get_dataloader("/home/yuan/data/HisMap/ADA/pre_train")
     # for data in dataloader:
     #     pass
+
+    # 3. Generate annotation data
+    generate_annotation_data(
+        "",
+        "/home/data/HisMAP/anno_data"
+    )

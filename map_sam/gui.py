@@ -44,8 +44,8 @@ torch.cuda.manual_seed(2023)
 np.random.seed(2023)
 
 SAM_MODEL_TYPE = "vit_b"
-# MedSAM_CKPT_PATH = "work_dir/MedSAM/medsam_vit_b.pth"
-MedSAM_CKPT_PATH = "ckpts/sam_vit_b_01ec64.pth"
+# MedSAM_CKPT_PATH = "work_dir/MedSAM-ViT-B-20250212-1845/medsam_model_best.pth"
+MedSAM_CKPT_PATH = "ckpts/mapsam_vit_b_20250213.pth"
 MEDSAM_IMG_INPUT_SIZE = 1024
 
 if torch.backends.mps.is_available():
@@ -287,7 +287,8 @@ class Window(QWidget):
         sam_mask = medsam_inference(medsam_model, self.embedding, box_1024, H, W)
 
         self.prev_mask = self.mask_c.copy()
-        self.mask_c[sam_mask != 0] = colors[self.color_idx % len(colors)]
+        # self.mask_c[sam_mask != 0] = colors[self.color_idx % len(colors)]
+        self.mask_c[sam_mask != 0] = colors[0]
         self.color_idx += 1
 
         bg = Image.fromarray(self.img_3c.astype("uint8"), "RGB")

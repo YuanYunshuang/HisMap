@@ -265,16 +265,18 @@ def main():
                 ## AMP
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     medsam_pred = medsam_model(image, boxes_np)
-                    loss = seg_loss(medsam_pred, gt2D) + ce_loss(
-                        medsam_pred, gt2D.float()
-                    )
+                    # loss = seg_loss(medsam_pred, gt2D) + ce_loss(
+                    #     medsam_pred, gt2D.float()
+                    # )
+                    loss = ce_loss(medsam_pred, gt2D.float())
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
             else:
                 medsam_pred = medsam_model(image, boxes_np)
-                loss = seg_loss(medsam_pred, gt2D) + ce_loss(medsam_pred, gt2D.float())
+                # loss = seg_loss(medsam_pred, gt2D) + ce_loss(medsam_pred, gt2D.float())
+                loss = ce_loss(medsam_pred, gt2D.float())
                 loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()

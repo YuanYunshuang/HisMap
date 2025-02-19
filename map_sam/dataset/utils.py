@@ -1,3 +1,4 @@
+import glob
 import os
 
 import numpy as np
@@ -83,15 +84,17 @@ def generate_train_data(root_dir, size=1024, margin=512):
 
 def remove_empty(path):
     gt_files = os.listdir(path)
-    for f in gt_files:
+    for f in tqdm.tqdm(gt_files):
         data = np.load(
             os.path.join(path, f), "r", allow_pickle=True
         )
         img = np.load(
             os.path.join(path.replace('gts', 'imgs'), f), "r", allow_pickle=True
         )
-        ids = np.unique(data)[1:]
-        if img.shape[0] != 1024 or img.shape[1] != 1024 or data.shape[0] != 1024 or data.shape[1] != 1024:
+        ids = np.unique(data).tolist()
+        if 3 not in ids:
+            os.remove(os.path.join(path, f))
+        elif img.shape[0] != 1024 or img.shape[1] != 1024 or data.shape[0] != 1024 or data.shape[1] != 1024:
             os.remove(os.path.join(path, f))
             # cv2.imshow('tmp', img)
             # cv2.waitKey()
@@ -100,7 +103,82 @@ def remove_empty(path):
             # print(np.unique(data))
 
 
+def region_growing(img_file, threshold=1):
+    import matplotlib.pyplot as plt
+    # Load the image
+    img = np.load(img_file, "r", allow_pickle=True)
+    visited = img == 0
+    region = np.zeros_like(img, dtype=int)
+
+    nbrs = np.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
+    inds = np.where(np.logical_not(visited))
+    seed = np.stack(inds, axis=-1)[:1]
+    visited[seed[0, 0], seed[0, 1]] = True
+    seed_value = img[seed[0, 0], seed[0, 1]]
+    oid = 1
+    region[seed[0, 0], seed[0, 1]] = oid
+    itr = 0
+
+    while len(seed) > 0:
+        cur_nbrs = seed[:, None] + nbrs[None, :]
+        cur_nbrs = np.unique(cur_nbrs.reshape(-1, 2), axis=0)
+        mask = (0 <= cur_nbrs[:, 0]) & (cur_nbrs[:, 0] < img.shape[0]) & \
+                     (0 <= cur_nbrs[:, 1]) & (cur_nbrs[:, 1] < img.shape[1])
+        cur_nbrs = cur_nbrs[mask]
+        valid_mask = (img[cur_nbrs[:, 0], cur_nbrs[:, 1]] - seed_value < threshold) & \
+                     (np.logical_not(visited[cur_nbrs[:, 0], cur_nbrs[:, 1]]))
+
+        valid_nbrs = cur_nbrs[valid_mask]
+        visited[valid_nbrs[:, 0], valid_nbrs[:, 1]] = True
+        region[valid_nbrs[:, 0], valid_nbrs[:, 1]] = oid
+        seed = valid_nbrs
+
+        if len(seed) == 0 and not visited.all():
+            oid += 1
+            inds = np.where(np.logical_not(visited))
+            seed = np.stack(inds, axis=-1)[:1]
+            region[seed[0, 0], seed[0, 1]] = oid
+            visited[seed[0, 0], seed[0, 1]] = True
+            seed_value = img[seed[0, 0], seed[0, 1]]
+
+        itr += 1
+
+    # seg = np.zeros_like((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+    # for i in range(oid):
+    #     seg = seg + (region == (i + 1))[:, :, None] * np.random.randint(256, size=(1, 1, 3))
+    # # Display the result
+    # plt.figure(figsize=(10, 5))
+    # plt.subplot(1, 2, 1)
+    # plt.title('Original Image')
+    # plt.imshow(img * 50, cmap='gray')
+    # plt.axis('off')
+    #
+    # plt.subplot(1, 2, 2)
+    # plt.title('Segmented Region')
+    # plt.imshow(seg, cmap='gray')
+    # plt.axis('off')
+    #
+    # plt.savefig("/home/yuan/Downloads/tmp.png")
+    # plt.close()
+    return region.astype(np.uint8)
+
+
+def npy_to_img(in_path, out_path):
+    for f in os.listdir(in_path):
+        name = os.path.join(in_path, f)
+        img = np.load(name, "r", allow_pickle=True)
+        img = (np.array(img) * 255).astype(np.uint8)
+        cv2.imwrite(os.path.join(out_path, f.replace('npy', 'jpg')), img)
+
+
 if __name__ == '__main__':
     # resize_tiffs('/home/yuan/data/HisMap/MapSAM/tifs', ratio=0.1)
-    remove_empty('/home/yuan/data/HisMap/MapSAM/train/gts')
+    # remove_empty('/home/yuan/data/HisMap/MapSAM/train/gts')
     # generate_train_data('/home/yuan/data/HisMap/MapSAM')
+    # for f in tqdm.tqdm(glob.glob('/home/yuan/data/HisMap/MapSAM/train/gts/*.npy')):
+    #     region = region_growing(f)
+    #     np.save(os.path.join(f), region)
+    npy_to_img(
+        "/home/yuan/data/HisMap/MapSAM/train/imgs",
+        "/home/yuan/data/HisMap/MapSAM/train/imgs_vis"
+    )

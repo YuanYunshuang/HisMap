@@ -170,8 +170,9 @@ class FocalLoss(BaseLoss):
         """
         num_classes = pred.size(1)
         target[target == self.bg_idx] = num_classes
-        valid_mask = target != self.ignore_idx
+
         pred = pred.permute(0, 2, 3, 1)
+        valid_mask = target != self.ignore_idx
         pred = pred[valid_mask]
         target = target[valid_mask]
         target = F.one_hot(target.long() - 1, num_classes=num_classes)

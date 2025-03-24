@@ -66,7 +66,7 @@ class MapDataset(Dataset):
         # available classes of the current target image
         tgt_cls = [int(k) for k, v in tgt_info.items() if v > 0.1 and int(k) > 0]
 
-        if len(tgt_cls) > 0 and (np.random.random() < 0.5 or len(tgt_cls) == 4):
+        if len(tgt_cls) > 0 and (np.random.random() < 0.75 or len(tgt_cls) == 4):
             # half probability to select a cls that is present in both src and tgt image
             selected_cls = np.random.choice(tgt_cls)
         else:
@@ -94,7 +94,9 @@ class MapDataset(Dataset):
         # self.visualize(src_img, src_lbl, tgt_img, tgt_lbl)
         src_lbl = src_lbl[::4, ::4]
         # tgt_lbl = tgt_lbl[::4, ::4]
-        return src_img, src_lbl, tgt_img, tgt_lbl
+        aux = {'src_name': src_img_name, 'tgt_name': tgt_image_name}
+        print(src_img_name, tgt_image_name)
+        return src_img, src_lbl, tgt_img, tgt_lbl, aux
 
     def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl):
         cv2.imshow('src_img', src_img.numpy().transpose(1, 2, 0))
@@ -106,12 +108,12 @@ class MapDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        src_img, src_lbl, tgt_img, tgt_lbl = zip(*batch)
+        src_img, src_lbl, tgt_img, tgt_lbl, aux = zip(*batch)
         src_img = torch.stack(src_img, dim=0)
         src_lbl = torch.stack(src_lbl, dim=0)
         tgt_img = torch.stack(tgt_img, dim=0)
         tgt_lbl = torch.stack(tgt_lbl, dim=0)
-        return src_img, src_lbl, tgt_img, tgt_lbl
+        return src_img, src_lbl, tgt_img, tgt_lbl, aux
 
 
 class MapTransform:

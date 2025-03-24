@@ -26,6 +26,7 @@ import glob
 from map_sam.conditional_sam.dataset import MapDataset
 from map_sam.conditional_sam.modeling.mapsam import MapSAM
 from map_sam.conditional_sam import sam_model_registry
+from map_sam.conditional_sam.utils.vis import vis_train
 
 # set seeds
 torch.manual_seed(2023)
@@ -61,7 +62,7 @@ def setup_parser():
     parser.add_argument("-w", "--checkpoint", type=str, default="ckpts/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output_dir", type=str, default="./logs")
     # train
-    parser.add_argument("-e", "--num_epochs", type=int, default=50)
+    parser.add_argument("-e", "--num_epochs", type=int, default=100)
     parser.add_argument("-bs", "--batch_size", type=int, default=8)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     # Optimizer parameters
@@ -71,6 +72,7 @@ def setup_parser():
     parser.add_argument("-use_amp", action="store_true", default=False, help="use amp")
     parser.add_argument("--resume", type=str, default="", help="Resuming training from checkpoint")
     parser.add_argument("--device", type=str, default="cuda:0")
+    parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -130,6 +132,11 @@ def main():
     seg_loss = monai.losses.DiceLoss(sigmoid=True, squared_pred=True, reduction="mean")
     # cross entropy loss
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
+
+    # resume
+    if args.resume:
+        mapsam.load_state_dict(torch.load(args.resume)['model'])
+
     # %% train
     num_epochs = args.num_epochs
     iter_num = 0
@@ -163,7 +170,7 @@ def main():
         pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'Loss': f'{0:.6f}'})
         for step, data in enumerate(pbar):
             optimizer.zero_grad()
-            img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data]
+            img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
             if args.use_amp:
                 ## AMP
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
@@ -189,6 +196,9 @@ def main():
             iter_num += 1
 
             pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
+
+            if args.debug:
+                vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
 
         epoch_loss /= step
         losses.append(epoch_loss)

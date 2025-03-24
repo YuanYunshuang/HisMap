@@ -17,6 +17,7 @@ import argparse
 import cv2
 
 from map_sam.conditional_sam import mapsam_model_registry, MapPredictor
+from map_sam.conditional_sam.utils.vis import vis_inference
 
 # set seeds
 torch.manual_seed(2023)
@@ -45,59 +46,85 @@ def show_masks(masks):
 
 def setup_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "-src", "--source-image", type=str,
-        default="/home/yuan/data/HisMap/MapSAM/train_stage0/imgs/3821_1974_0_0.png",
+    parser.add_argument( "-l", "--list-file", type=str,
+        default="/home/yuan/Downloads/src_tgt.txt",
         help="The filename of the source image example", )
-    parser.add_argument( "-l", "--source-label", type=str,
-        default="/home/yuan/data/HisMap/MapSAM/train_stage0/lbls/3821_1974_0_0.png",
-        help="The filename of the label of the source image example", )
-    parser.add_argument( "-tgt", "--target-image", type=str,
-        default="/home/yuan/data/HisMap/MapSAM/train_stage0/imgs/3821_1974_0_2304.png",
-        help="The filename of the target image to be segmented", )
+    parser.add_argument( "-d", "--data-root", type=str,
+        default="/home/yuan/data/HisMap/MapSAM/train_stage0",
+        help="The filename of the source image example", )
     parser.add_argument("-m", "--model-type", type=str,
         default="vit_b", help="model type", )
 
     parser.add_argument("-li", "--label-index", type=int, default=3)
-    parser.add_argument("-w", "--checkpoint", type=str, default="ckpts/mapsam_model_best.pth")
+    parser.add_argument("-c", "--checkpoint", type=str, default="/home/yuan/code/HisMap/map_sam/logs/default-20250321-1433/medsam_model_best.pth")
     parser.add_argument("-o", "--output_dir", type=str, default="./logs")
     parser.add_argument("--device", type=str, default="cuda:0")
     args = parser.parse_args()
     return args
 
 
+@torch.no_grad()
 def main():
     args = setup_parser()
 
     mapsam = mapsam_model_registry[args.model_type](checkpoint=args.checkpoint).to(args.device)
+    mapsam.load_state_dict(torch.load(args.checkpoint)['model'])
     mapsam.eval()
 
     map_predictor = MapPredictor(mapsam)
 
-    # Read src example
-    src_img = cv2.imread(args.source_image, cv2.IMREAD_UNCHANGED)
-    src_lbl = cv2.imread(args.source_label, cv2.IMREAD_UNCHANGED)
-    src_lbl = src_lbl == args.label_index
+    src_tgt_list = [x.strip().split(' ') for x in open(args.list_file, "r").readlines()]
 
-    map_predictor.set_src_example(src_img, src_lbl)
+    for src, tgt in tqdm(src_tgt_list):
+        src_file = os.path.join(args.data_root, 'imgs', src)
+        tgt_file = os.path.join(args.data_root, 'imgs', tgt)
+        src_label_file = os.path.join(args.data_root, 'lbls', src)
 
-    # Read tgt image
-    tgt_img = cv2.imread(args.target_image, cv2.IMREAD_UNCHANGED)
-    masks_np, iou_predictions_np, low_res_masks_np = map_predictor.predict(tgt_img)
-    max_iou_mask = masks_np[np.argmax(iou_predictions_np)]
+        # Read input
+        src_img = cv2.imread(src_file, cv2.IMREAD_UNCHANGED)
+        src_lbl_ori = cv2.imread(src_label_file, cv2.IMREAD_UNCHANGED)
+        tgt_img = cv2.imread(tgt_file, cv2.IMREAD_UNCHANGED)
+        src_lbl = (src_lbl_ori == args.label_index)[::4, ::4]
 
-    plt.figure(figsize=(8, 8))
-    plt.imshow(src_img)
-    show_masks(src_lbl[None])
-    plt.axis('off')
-    plt.show()
-    plt.close()
+        src_img_tensor = map_predictor.image_to_tensor(src_img)
+        src_lbl_tensor = map_predictor.label_to_tensor(src_lbl)
+        tgt_img_tensor = map_predictor.image_to_tensor(tgt_img)
 
-    plt.figure(figsize=(8, 8))
-    plt.imshow(tgt_img)
-    show_masks(max_iou_mask[None])
-    plt.axis('off')
-    plt.show()
-    plt.close()
+        map_predictor.set_src_example(src_img, src_lbl_ori == args.label_index)
+        masks_np, iou_predictions_np, low_res_masks_np = map_predictor.predict(tgt_img)
+        map_pred = masks_np[0]
+
+        # map_pred = mapsam(src_img_tensor, src_lbl_tensor.squeeze(1), tgt_img_tensor)[0, 0].cpu().numpy()
+
+        # img_emb = map_predictor.model.image_encoder(torch.cat([src_img_tensor, tgt_img_tensor], dim=0))
+        # src_img_emb = img_emb[:1]
+        # tgt_img_emb = img_emb[1:]
+        # src_img_emb = map_predictor.model.image_encoder(src_img_tensor)
+        # prompt_emb_sparse, prompt_emb_dense = map_predictor.model.prompt_encoder(
+        #         imgs_emb=src_img_emb,
+        #         masks=src_lbl_tensor.float(),
+        #     )
+        # tgt_img_emb = map_predictor.model.image_encoder(tgt_img_tensor)
+        # # Predict masks
+        # low_res_masks, iou_predictions = map_predictor.model.mask_decoder(
+        #     image_embeddings=tgt_img_emb,
+        #     image_pe=map_predictor.model.prompt_encoder.get_dense_pe(),
+        #     sparse_prompt_embeddings=prompt_emb_sparse,
+        #     dense_prompt_embeddings=prompt_emb_dense,
+        #     multimask_output=False,
+        # )
+        #
+        # # Upscale the masks to the original image resolution
+        # masks = map_predictor.model.postprocess_masks(low_res_masks, (384, 384))
+        # map_pred = masks[0, 0].cpu().numpy()
+
+        vis_inference(
+            src_img_tensor.cpu()[0].permute(1, 2, 0).numpy(),
+            src_lbl_ori == args.label_index,
+            tgt_img_tensor.cpu()[0].permute(1, 2, 0).numpy(),
+            map_pred
+        )
+        pass
 
 if __name__ == "__main__":
     main()

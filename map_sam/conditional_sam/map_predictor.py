@@ -8,6 +8,7 @@
 import numpy as np
 import torch
 import torchvision.transforms.functional as tvf
+from torchvision.transforms import v2
 
 from map_sam.conditional_sam.modeling import MapSAM
 
@@ -33,6 +34,19 @@ class MapPredictor:
         self.model = mapsam_model
         self.img_size = img_size
         self.reset_image()
+        color_jitter = 0.05
+
+        self.img_transforms = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            # v2.ColorJitter(color_jitter, color_jitter, color_jitter),
+        ])
+
+        self.lbl_transforms = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float, scale=False),
+        ])
 
     def image_to_tensor(self, image):
         pad_x = self.img_size - image.shape[0]
@@ -40,15 +54,17 @@ class MapPredictor:
         if pad_x > 0 or pad_y > 0:
             image = np.pad(image, ((0, pad_x), (0, pad_y), (0, 0)), mode="constant", constant_values=0)
 
-        input_image_torch = torch.as_tensor(image, device=self.device, dtype=torch.float).permute(2, 0, 1).contiguous()
-        input_image_torch = tvf.normalize(input_image_torch / 255, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        # input_image_torch = torch.as_tensor(image, device=self.device, dtype=torch.float).permute(2, 0, 1).contiguous()
+        # input_image_torch = tvf.normalize(input_image_torch / 255, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        input_image_torch = self.img_transforms(image)
         input_image_torch = input_image_torch[None, :, :, :]
-        return input_image_torch
+        return input_image_torch.to(self.device)
 
     def label_to_tensor(self, label):
-        input_label_torch = torch.as_tensor(label, device=self.device, dtype=torch.float)
-        input_label_torch = input_label_torch[None, None, :, :]
-        return input_label_torch
+        # input_label_torch = torch.as_tensor(label, device=self.device, dtype=torch.float)
+        input_label_torch = self.lbl_transforms(label)
+        input_label_torch = input_label_torch[None, :, :]
+        return input_label_torch.to(self.device)
 
     @torch.no_grad()
     def set_src_example(
@@ -82,7 +98,7 @@ class MapPredictor:
     def predict(
         self,
         target_image: Optional[np.ndarray] = None,
-        multimask_output: bool = True,
+        multimask_output: bool = False,
         return_logits: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -128,7 +144,7 @@ class MapPredictor:
         masks = self.model.postprocess_masks(low_res_masks, (self.img_size, self.img_size))
 
         if not return_logits:
-            masks = masks > self.model.mask_threshold
+            masks = masks.sigmoid()
 
         masks_np = masks[0].detach().cpu().numpy()
         iou_predictions_np = iou_predictions[0].detach().cpu().numpy()

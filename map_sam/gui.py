@@ -45,7 +45,7 @@ np.random.seed(2023)
 
 SAM_MODEL_TYPE = "vit_b"
 # MedSAM_CKPT_PATH = "work_dir/MedSAM-ViT-B-20250212-1845/medsam_model_best.pth"
-MedSAM_CKPT_PATH = "ckpts/mapsam_vit_b_20250213.pth"
+MedSAM_CKPT_PATH = "../model_zoo/medsam/mapsam_vit_b_20250213.pth"
 MEDSAM_IMG_INPUT_SIZE = 1024
 
 if torch.backends.mps.is_available():

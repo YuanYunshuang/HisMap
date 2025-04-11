@@ -2,9 +2,9 @@
 import torch
 
 # %% convert medsam model checkpoint to sam checkpoint format for convenient inference
-sam_ckpt_path = "../ckpts/sam_vit_b_01ec64.pth"
+sam_ckpt_path = "../../model_zoo/sam/sam_vit_b_01ec64.pth"
 medsam_ckpt_path = "/home/yuan/code/HisMap/map_sam/work_dir/MedSAM-ViT-B-20250213-1346/medsam_model_best.pth"
-save_path = "../ckpts/mapsam_vit_b_20250213.pth"
+save_path = "../../model_zoo/medsam/mapsam_vit_b_20250213.pth"
 multi_gpu_ckpt = False  # set as True if the model is trained with multi-gpu
 
 sam_ckpt = torch.load(sam_ckpt_path)

@@ -30,6 +30,11 @@ class MapSAM(nn.Module):
             self.prompt_encoder = ExampleEncoder(256)
         else:
             self.prompt_encoder = prompt_encoder
+        self.freeze_patch_embeddings()
+
+    def freeze_patch_embeddings(self):
+        for param in self.image_encoder.patch_embed.parameters():
+            param.requires_grad = False
 
     def forward(self, img_src, lbl_src, img_tgt):
         image = torch.cat([img_src, img_tgt], dim=0)

@@ -27,6 +27,7 @@ from smolsam.modeling.dataset import MapDataset
 from smolsam.modeling.mapsam import MapSAM
 from smolsam import sam_model_registry
 from smolsam.utils.vis import vis_train
+from smolsam.utils.train_utils import adjust_learning_rate_cosine
 
 # set seeds
 torch.manual_seed(2023)
@@ -64,16 +65,18 @@ def setup_parser():
     parser.add_argument("-o","--output_dir", type=str, default="./logs")
     # train
     parser.add_argument("-e", "--num_epochs", type=int, default=100)
-    parser.add_argument("-bs", "--batch_size", type=int, default=8)
+    parser.add_argument("-bs", "--batch_size", type=int, default=16)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("-weight_decay", type=float, default=0.01, help="weight decay (default: 0.01)")
     parser.add_argument("-lr", type=float, default=0.0001, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("-warmup_epochs", type=int, default=1, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("-use_wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("-use_amp", action="store_true", default=False, help="use amp")
     parser.add_argument("--resume", type=str, default="", help="Resuming training from checkpoint")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--lr-scheduler", action="store_true", default=False)
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -134,14 +137,11 @@ def main():
     # cross entropy loss
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
-    # resume
-    if args.resume:
-        mapsam.load_state_dict(torch.load(args.resume)['model'])
-
     # %% train
     num_epochs = args.num_epochs
     iter_num = 0
     losses = []
+    lrs = []
     best_loss = 1e10
     train_dataset = MapDataset(args.root_dir)
 
@@ -159,7 +159,7 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            start_epoch = checkpoint["epoch"] + 1
+            start_epoch = 0 # checkpoint["epoch"] + 1
             mapsam.load_state_dict(checkpoint["model"])
             optimizer.load_state_dict(checkpoint["optimizer"])
     if args.use_amp:
@@ -167,8 +167,14 @@ def main():
 
     for epoch in range(start_epoch, num_epochs):
         epoch_loss = 0
+        if args.lr_scheduler:
+            cur_lr = adjust_learning_rate_cosine(optimizer, base_lr=args.lr, epoch=epoch,
+                                                 total_epoch=num_epochs,
+                                                 warmup_epochs=args.warmup_epochs)
+        else:
+            cur_lr = optimizer.param_groups[0]["lr"]
         pbar = tqdm(train_dataloader)
-        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'Loss': f'{0:.6f}'})
+        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:.6f}', 'Loss': f'{0:.6f}'})
         for step, data in enumerate(pbar):
             optimizer.zero_grad()
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
@@ -196,13 +202,14 @@ def main():
             epoch_loss += loss.item()
             iter_num += 1
 
-            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
+            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'LR': f'{cur_lr:.6f}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
 
-            if args.debug:
+            if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
 
         epoch_loss /= step
         losses.append(epoch_loss)
+        lrs.append(cur_lr)
         if args.use_wandb:
             wandb.log({"epoch_loss": epoch_loss})
         print(f'Time: {datetime.now().strftime("%Y%m%d-%H%M")}, Epoch: {epoch}, Loss: {epoch_loss}')
@@ -223,6 +230,10 @@ def main():
             }
             torch.save(checkpoint, join(model_save_path, "medsam_model_best.pth"))
 
+        # save loss
+        with open(join(model_save_path, "medsam_loss.txt"), "w") as f:
+            for x, y in zip(losses, lrs):
+                f.write(f'{y:.6f}, {x:.6f}\n')
         # %% plot loss
         plt.plot(losses)
         plt.title("Dice + Cross Entropy Loss")

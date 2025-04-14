@@ -133,10 +133,6 @@ def main():
     # cross entropy loss
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
-    # resume
-    if args.resume:
-        mapsam.load_state_dict(torch.load(args.resume)['model'])
-
     # %% train
     num_epochs = args.num_epochs
     iter_num = 0

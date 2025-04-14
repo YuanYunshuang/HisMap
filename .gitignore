@@ -4,3 +4,6 @@ src/model
 *__pycache__*
 data
 logs
+map_sam/work_dir
+map_sam/logs
+model_zoo/

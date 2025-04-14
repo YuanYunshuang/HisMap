@@ -159,7 +159,7 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            start_epoch = 0 # checkpoint["epoch"] + 1
+            start_epoch = checkpoint["epoch"] + 1
             mapsam.load_state_dict(checkpoint["model"])
             optimizer.load_state_dict(checkpoint["optimizer"])
     if args.use_amp:
@@ -174,7 +174,7 @@ def main():
         else:
             cur_lr = optimizer.param_groups[0]["lr"]
         pbar = tqdm(train_dataloader)
-        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:.6f}', 'Loss': f'{0:.6f}'})
+        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})
         for step, data in enumerate(pbar):
             optimizer.zero_grad()
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
@@ -202,7 +202,7 @@ def main():
             epoch_loss += loss.item()
             iter_num += 1
 
-            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'LR': f'{cur_lr:.6f}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
+            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
 
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)

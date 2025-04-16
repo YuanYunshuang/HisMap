@@ -69,14 +69,14 @@ def setup_parser():
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("-weight_decay", type=float, default=0.01, help="weight decay (default: 0.01)")
-    parser.add_argument("-lr", type=float, default=0.0001, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("-lr", type=float, default=1e-5, metavar="LR", help="learning rate (absolute lr)")
     parser.add_argument("-warmup_epochs", type=int, default=0, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("-use_wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("-use_amp", action="store_true", default=False, help="use amp")
     parser.add_argument("--resume", type=str, default="", help="Resuming training from checkpoint")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
-    parser.add_argument("--lr-scheduler", action="store_true", default=False)
+    parser.add_argument("--lr-scheduler", action="store_true", default=True)
     args = parser.parse_args()
 
     if args.use_wandb:

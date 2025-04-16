@@ -22,6 +22,7 @@ class MapSAM(nn.Module):
         image_encoder,
         mask_decoder,
         prompt_encoder=None,
+        train_patch_embed=True,
     ):
         super().__init__()
         self.image_encoder = image_encoder
@@ -30,7 +31,8 @@ class MapSAM(nn.Module):
             self.prompt_encoder = ExampleEncoder(256)
         else:
             self.prompt_encoder = prompt_encoder
-        self.freeze_patch_embeddings()
+        if not train_patch_embed:
+            self.freeze_patch_embeddings()
 
     def freeze_patch_embeddings(self):
         for param in self.image_encoder.patch_embed.parameters():

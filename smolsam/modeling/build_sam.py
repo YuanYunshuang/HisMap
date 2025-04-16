@@ -107,6 +107,10 @@ def _build_sam(
         pixel_std=[58.395, 57.12, 57.375],
     )
     sam.eval()
+
+    if checkpoint is None:
+        return sam
+
     checkpoint = Path(checkpoint)
     if checkpoint.name == "sam_vit_b_01ec64.pth" and not checkpoint.exists():
         cmd = input("Download sam_vit_b_01ec64.pth from facebook AI? [y]/n: ")

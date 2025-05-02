@@ -78,10 +78,10 @@ def setup_parser():
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--plot-loss", action="store_true", default=False)
     parser.add_argument("--debug", action="store_true", default=False)
-    parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
+    # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
     parser.add_argument("--disable-lr-scheduler", action="store_true", default=False)
     parser.add_argument("--from-scratch", action="store_true", default=False)
-    parser.add_argument("--train-on-all-data", action="store_true", default=False)
+    parser.add_argument("--data-mode", type=str, default="train50", help="[train50 | train75] percentage of data split for training.")
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -120,8 +120,7 @@ def main():
     sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
     mapsam = MapSAM(
         image_encoder=sam_model.image_encoder,
-        mask_decoder=sam_model.mask_decoder,
-        train_patch_embed = args.train_patch_emb,
+        mask_decoder=sam_model.mask_decoder
     ).to(device)
     mapsam.train()
 
@@ -151,8 +150,7 @@ def main():
     losses = []
     lrs = []
     best_loss = 1e10
-    mode = "all" if args.train_on_all_data else "train"
-    train_dataset = MapDataset(args.root_dir, mode=mode)
+    train_dataset = MapDataset(args.root_dir, mode=args.data_mode)
 
     logger.info(f"# training samples: {len(train_dataset)}")
     train_dataloader = DataLoader(

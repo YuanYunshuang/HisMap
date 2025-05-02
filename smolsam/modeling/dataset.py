@@ -6,6 +6,8 @@ import cv2
 import torch
 import numpy as np
 import json
+
+from dash.dash_table.FormatTemplate import percentage
 from torch.utils.data import Dataset
 try:
     from torchvision.transforms import v2
@@ -14,41 +16,82 @@ except:
 
 
 class MapDataset(Dataset):
-    def __init__(self, data_root, mode="train"):
+    def __init__(self, data_root, mode="train", fix_src_lbl=0):
+        """
+        Initializes an instance of the class with dataset information, loads file lists,
+        and initializes transformations.
+
+        Attributes:
+        data_root: str
+            The root directory of the dataset containing all related files.
+        mode: str
+            Indicates the mode in which the dataset is being used. Default is "train".
+        fix_src_lbl: bool
+            A flag used to determine whether source labels should be fixed. Default is 0:not fixed.
+            Other options: 1: fixed to 1, 2: fixed to 2, 3: fixed to 3, 4: fixed to 4.
+        stats: dict
+            Contains the dataset statistics loaded from the 'dinfo.json' file in the
+            data_root.
+        file_list: list[str]
+            A list containing file names from the specified file in the current mode.
+        transform: MapTransform
+            Instance of the MapTransform class used for applying transformations.
+
+        Parameters:
+        data_root: str
+            Root directory where dataset files are stored.
+        mode: str, optional
+            Dataset mode, either 'train', 'test', etc. Default is "train".
+        fix_src_lbl: bool, optional
+            Whether to fix source labels. Default is 0:not fixed.
+            Other options: 1: fixed to 1, 2: fixed to 2, 3: fixed to 3, 4: fixed to 4.
+
+        """
         self.data_root = data_root
         self.mode = mode
+        self.fix_src_lbl = fix_src_lbl
 
         with open(os.path.join(self.data_root, "dinfo.json")) as f:
             self.stats = json.load(f)
         with open(os.path.join(self.data_root, f"{mode}.txt")) as f:
             self.file_list = [x.strip() for x in f.readlines()]
+
         self.transform = MapTransform()
         print(f"number of images: {len(self.file_list)}")
         self.get_loading_list()
-
-
 
     def get_loading_list(self):
         loading_list_src = {}
         for name, info in self.stats.items():
             key = name.rsplit("_", 2)[0]
             if key not in loading_list_src:
-                loading_list_src[key] = {i: [] for i in range(1, 5)}
+                if self.fix_src_lbl > 0:
+                    loading_list_src[key] = {self.fix_src_lbl: []}
+                else:
+                    loading_list_src[key] = {i: [] for i in range(1, 5)}
             for k, v in info.items():
                 if int(k) == 0:
                     continue
+                if 0 < self.fix_src_lbl != int(k):
+                    continue
                 if 0.1 < v < 0.9 :
                     loading_list_src[key][int(k)].append(name)
+
+        # omit evaluation for map sheets that does not contian fixed target class
+        if self.fix_src_lbl > 0:
+            invalid_map_key = []
+            for k, v in loading_list_src.items():
+                if len(v[self.fix_src_lbl]) == 0:
+                    invalid_map_key.append(k)
+            for k in invalid_map_key:
+                del loading_list_src[k]
+
+            total_file_num = len(self.file_list)
+            self.file_list = [n for n in self.file_list if n.rsplit('_', 2)[0] not in invalid_map_key]
+            print(f"{len(self.file_list)} images out of {total_file_num} are selected for evaluation of the fixed src label {self.fix_src_lbl}.")
         self.loading_list = loading_list_src
 
-    def __len__(self):
-        return len(self.file_list)
-
-    def __getitem__(self, index):
-        tgt_image_name = self.file_list[index]
-        loc, tgt_name = tgt_image_name.split(".")
-        tgt_map_key = tgt_image_name.rsplit("_", 2)[0]
-        tgt_info = self.stats[tgt_image_name]
+    def select_tgt_cls(self, tgt_info, tgt_map_key):
         # available classes of the current target image
         tgt_cls = [int(k) for k, v in tgt_info.items() if v > 0.1 and int(k) > 0]
 
@@ -61,6 +104,21 @@ class MapDataset(Dataset):
             if len(not_tgt_cls) == 0:
                 not_tgt_cls = [int(k) for k, v in self.loading_list[tgt_map_key].items() if len(v) > 0]
             selected_cls = np.random.choice(not_tgt_cls)
+        return selected_cls
+
+    def __len__(self):
+        return len(self.file_list)
+
+    def __getitem__(self, index):
+        tgt_image_name = self.file_list[index]
+        loc, tgt_name = tgt_image_name.split(".")
+        tgt_map_key = tgt_image_name.rsplit("_", 2)[0]
+        tgt_info = self.stats[tgt_image_name]
+
+        if self.fix_src_lbl > 0:
+            selected_cls = self.fix_src_lbl
+        else:
+            selected_cls = self.select_tgt_cls(tgt_info, tgt_map_key)
 
         src_img_name = np.random.choice(self.loading_list[tgt_map_key][selected_cls])
         _, src_name = src_img_name.split(".")
@@ -168,11 +226,24 @@ def generate_meta_info(data_root, merge_water=True):
 
     with open(os.path.join(data_root, "dinfo.json"), "w") as fh:
         json.dump(stats, fh, indent=4)
-    with open(os.path.join(data_root, "train.txt"), "w") as fh:
+    # 50/50
+    with open(os.path.join(data_root, "train50.txt"), "w") as fh:
         fh.write("\n".join(train_split))
-    with open(os.path.join(data_root, "test.txt"), "w") as fh:
+    with open(os.path.join(data_root, "test50.txt"), "w") as fh:
         fh.write("\n".join(test_split))
-    print(f"Found {len(stats)} samples, including {len(train_split)} train samples and {len(test_split)} test samples.")
+
+    # 75 / 25
+    total_file_num = len(train_split) + len(test_split)
+    goal_num = int(total_file_num * 0.75)
+    selected = np.random.choice(test_split, goal_num - len(train_split), replace=False)
+    train_split.extend(selected)
+    test_split = [x for x in test_split if x not in selected]
+    with open(os.path.join(data_root, "train75.txt"), "w") as fh:
+        fh.write("\n".join(train_split))
+    with open(os.path.join(data_root, "test25.txt"), "w") as fh:
+        fh.write("\n".join(test_split))
+
+    print(f"Found {len(stats)} samples.")
     return stats
 
 if __name__ == '__main__':

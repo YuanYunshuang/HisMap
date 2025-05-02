@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import matplotlib.pyplot as plt
 
@@ -73,5 +75,13 @@ def plot_sam_clip_result():
     plt.close()
 
 
+def label_to_mask(label_file, label):
+    L = cv2.imread(label_file, cv2.IMREAD_GRAYSCALE)
+    L = (L == label) * 255
+    filename = f"{os.environ.get('HOME')}/Downloads/{os.path.basename(label_file)}"
+    cv2.imwrite(filename, L)
+
+
 if __name__ == '__main__':
-    plot_sam_clip_result()
+    # plot_sam_clip_result()
+    label_to_mask("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_0_0.png", 3)

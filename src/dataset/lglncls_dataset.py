@@ -169,7 +169,7 @@ def generate_dataset_v3(path_in, path_out, mode='train', crop_size=384, num_pixe
 
 
 
-class LglnclsDataset(Dataset):
+class HamelnDataset(Dataset):
 
     def __init__(self,
                  cfgs,

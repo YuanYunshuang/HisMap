@@ -56,7 +56,7 @@ class MapDataset(Dataset):
         with open(os.path.join(self.data_root, f"{mode}.txt")) as f:
             self.file_list = [x.strip() for x in f.readlines()]
 
-        self.transform = MapTransform()
+        self.transform = MapTransformTrain() if 'train' in mode else MapTransformTest()
         print(f"number of images: {len(self.file_list)}")
         self.get_loading_list()
 
@@ -96,10 +96,10 @@ class MapDataset(Dataset):
         tgt_cls = [int(k) for k, v in tgt_info.items() if v > 0.1 and int(k) > 0]
 
         if len(tgt_cls) > 0 and (np.random.random() < 0.75 or len(tgt_cls) == 4):
-            # half probability to select a cls that is present in both src and tgt image
+            # p probability to select a cls that is present in both src and tgt image
             selected_cls = np.random.choice(tgt_cls)
         else:
-            # half probability to select a cls that is present in src image but not present in tgt image
+            # p probability to select a cls that is present in src image but not present in tgt image
             not_tgt_cls = [x for x in range(1, 5) if x not in tgt_cls and len(self.loading_list[tgt_map_key][x]) > 0]
             if len(not_tgt_cls) == 0:
                 not_tgt_cls = [int(k) for k, v in self.loading_list[tgt_map_key].items() if len(v) > 0]
@@ -158,7 +158,7 @@ class MapDataset(Dataset):
         return src_img, src_lbl, tgt_img, tgt_lbl, aux
 
 
-class MapTransform:
+class MapTransformTrain:
     def __init__(self, rot_degrees=30, color_jitter=0.05):
         self.geometric_transforms = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
@@ -184,6 +184,24 @@ class MapTransform:
         img, lbl = self.geometric_transforms(img, lbl)
         return img, lbl.squeeze()
 
+
+class MapTransformTest:
+    def __init__(self):
+        self.img_transforms = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ])
+
+        self.lbl_transforms = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.bool, scale=False),
+        ])
+
+    def __call__(self, img, lbl):
+        img = self.img_transforms(img)
+        lbl = self.lbl_transforms(lbl)
+        return img, lbl.squeeze()
 
 
 def get_dataloader(root_dir, batch_size=4, mode='train'):

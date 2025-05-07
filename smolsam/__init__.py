@@ -21,6 +21,6 @@ from smolsam.modeling.build_mapsam import (
     mapsam_model_registry,
 )
 
-from .predictor import SamPredictor
+from .predictor import SamplePredictor
 from .tools.automatic_mask_generator import SamAutomaticMaskGenerator
 from .map_predictor import MapPredictor

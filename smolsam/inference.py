@@ -26,7 +26,7 @@ import glob
 from smolsam.modeling.dataset import MapDataset
 from smolsam.modeling.mapsam import MapSAM
 from smolsam import sam_model_registry
-from smolsam.utils.vis import vis_train
+from smolsam.utils.vis import vis_train, save_results
 from smolsam.tools.eval import Evaluator
 
 # set seeds
@@ -65,6 +65,7 @@ def setup_parser():
     parser.add_argument("-o","--output_dir", type=str)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     parser.add_argument("-bs", "--batch_size", type=int, default=32)
+    parser.add_argument("-s", "--save-result", action="store_true", default=False)
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--data-split", type=str, default='test')
@@ -92,7 +93,7 @@ def eval(pred, target, thresh=0.5):
     return iou, prec, rec
 
 
-def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger):
+def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
     losses = []
     evals = []
     test_dataset = MapDataset(args.root_dir, mode=args.data_split, fix_src_lbl=label)
@@ -117,6 +118,7 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger):
         #                   'IoU': f'{0:.3f}', 'Precision': f'{0:.3f}', 'Recall': f'{0:.3f}'})
         for step, data in enumerate(pbar):
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
+            meta = data[4]
 
             mapsam_pred = mapsam(img_src, lbl_src, img_tgt)
             lbl_pred = mapsam_pred.sigmoid()
@@ -125,6 +127,8 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger):
             evaluator.add_sample(lbl_pred.squeeze(1), lbl_tgt)
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
+            if args.save_result:
+                save_results(os.path.join(out_dir, str(label)), img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, meta['tgt_name'])
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
             losses.append(loss.item())
@@ -174,7 +178,7 @@ def main():
 
     # %% test
     for label in [1, 2, 3, 4]:
-        single_test(label, args, device, mapsam, seg_loss, ce_loss, logger)
+        single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 
 
 

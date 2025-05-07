@@ -1,8 +1,48 @@
+import os
+
 import matplotlib.pyplot as plt
 from torch.nn import functional as F
 import numpy as np
 import cv2
 import torch
+
+def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, label_only=False):
+    bs = pred_tgt.shape[0]
+
+    if label_only:
+        inf_dir = os.path.join(out_dir, f'inf_labels')
+        os.makedirs(inf_dir, exist_ok=True)
+        pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
+        pred_tgt = (pred_tgt * 255).astype(np.uint8)
+        for i in range(bs):
+            cv2.imwrite(os.path.join(inf_dir, names[i] + '.png'), pred_tgt[i])
+    else:
+        inf_dir = os.path.join(out_dir, f'inf_plots')
+        os.makedirs(inf_dir, exist_ok=True)
+        lbl_src = F.interpolate(
+            lbl_src.unsqueeze(1).float(),
+            img_src.shape[-2:],
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(1)
+
+        img_src = img_src.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+        img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+        lbl_src = lbl_src.detach().cpu().numpy()
+        lbl_tgt = lbl_tgt.detach().cpu().numpy()
+        pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
+
+        for i in range(bs):
+            midbar = np.zeros_like(img_src[0, :, :10]) + 0.5
+            img = np.concatenate((
+                img_src[i], midbar,
+                lbl_src[i][..., None][..., [0, 0, 0]], midbar,
+                img_tgt[i], midbar,
+                pred_tgt[i][..., None][..., [0, 0, 0]], midbar,
+                lbl_tgt[i][..., None][..., [0, 0, 0]],
+            ), axis=1)
+            img = (img * 255).astype(np.uint8)
+            cv2.imwrite(os.path.join(inf_dir, names[i] + '.png'), img)
 
 
 def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):

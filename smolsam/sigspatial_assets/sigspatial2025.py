@@ -1,7 +1,9 @@
 import os
+import sys
 
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 
 from data.utils.vis import overlay_label_on_image, apply_colormap_transparent
 from data.bayern import COLORS
@@ -70,7 +72,7 @@ def plot_sam_clip_result():
     plot_prompt_text(grid[10], "forest area in a map")
     plot_prompt_text(grid[11], "area with small circles")
 
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.savefig("figs/sam_clip.pdf")
     plt.close()
 
@@ -82,6 +84,53 @@ def label_to_mask(label_file, label):
     cv2.imwrite(filename, L)
 
 
+def summarize_dataset(file):
+    sheets = {'hameln': [], 'bayern': []}
+    n_samples = {'hameln': 0, 'bayern': 0}
+    with open(file, 'r') as f:
+        for line in f:
+            area, name = line.strip().split('.')
+            map_sheet = name.rsplit("_", 2)[0]
+            if map_sheet not in sheets[area]:
+                sheets[area].append(map_sheet)
+            n_samples[area] += 1
+
+    print(f"Number of map sheets of hameln: {len(sheets['hameln'])}")
+    print(f"Number of map sheets of bayern: {len(sheets['bayern'])}")
+    print(f"Number of samples of hameln: {n_samples['hameln']}")
+    print(f"Number of samples of bayern: {n_samples['bayern']}")
+
+
+def label_to_rgb(label_file):
+    label = cv2.imread(label_file, cv2.IMREAD_GRAYSCALE)
+    rgb_label = np.zeros((label.shape[0], label.shape[1], 3), dtype=np.uint8)
+    for i in range(1, 5):
+        rgb_label[label == i] = COLORS[i-1]
+    cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/{os.path.basename(label_file)}",
+                rgb_label[..., ::-1])
+
+
+def crop_img_from_plot(plot_file):
+    plot_img = cv2.imread(plot_file)
+    for idx in range(5):
+        m = idx * 10
+        img = plot_img[:, idx*384+m:(idx+1)*384+m]
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/crop{idx}.png", img)
+
+
+def masked_img():
+    img = cv2.imread("/home/yuan/Downloads/crop0.png")
+    mask = cv2.imread("/home/yuan/Downloads/crop1.png", cv2.IMREAD_GRAYSCALE)
+    img = overlay_label_on_image(img, mask.astype(bool), color=COLORS[1][::-1])
+    cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/crop_overlay.png", img)
+
+
+
+
 if __name__ == '__main__':
     # plot_sam_clip_result()
-    label_to_mask("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_0_0.png", 3)
+    # label_to_mask("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_768_4608.png", 3)
+    # summarize_dataset("/home/yuan/data/HisMap/SMOLdata/all.txt")
+    label_to_rgb("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_2688_1152.png")
+    crop_img_from_plot("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/2/inf_plots/hameln.3821_1974_2688_1152.png")
+    masked_img()

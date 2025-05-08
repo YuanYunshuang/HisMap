@@ -12,6 +12,7 @@ from data.utils.vis import overlay_label_on_image
 from smolsam.modeling.dataset import MapTransformTest
 from smolsam.modeling.mapsam import MapSAM
 from smolsam import sam_model_registry
+from smolsam.utils.vis import apply_jet_colormap_transparent
 
 
 class SamplePredictor:
@@ -61,7 +62,11 @@ class SamplePredictor:
         labeled_tgt_img = apply_jet_colormap_transparent(self.tgt_img, tgt_mask)
 
         vis_img = np.concatenate((labeled_src_img, labeled_tgt_img), axis=1)
-        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/pred.png", vis_img)
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/pred.png", labeled_tgt_img)
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/src.png", self.src_img)
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/tgt.png", self.tgt_img)
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/src_lbl.png", (self.src_label * 255).astype(np.uint8))
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/tgt_pred.png", (tgt_mask * 255).astype(np.uint8))
 
     @torch.no_grad()
     def predict(
@@ -82,17 +87,18 @@ class SamplePredictor:
 
 
 if __name__ == "__main__":
-    from smolsam.utils.vis import apply_jet_colormap_transparent
-    label = 3
-    predictor = SamplePredictor("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/medsam_model_best.pth")
+
+    label = 1
+    predictor = SamplePredictor("/home/yuan/code/HisMap/smolsam/logs/fewshot/medsam_model_best.pth")
     pred_mask = predictor.predict(
-        "/home/yuan/Downloads/3921_2023_1536_11082.png",
-        "/home/yuan/Downloads/3921_2023_1536_11082_mask.png",
-        "/home/yuan/data/HisMap/SMOLdata/hameln/imgs/3921_2023_1920_384.png",
+        "/home/yuan/data/HisMap/SMOLdata/fewshot/imgs/c3821_1898_512_512.png",
+        "/home/yuan/data/HisMap/SMOLdata/fewshot/lbls/c3821_1898_512_512.png",
+        "/home/yuan/data/HisMap/SMOLdata/hameln/imgs/3922_1898_8448_5760.png",
         label
     )
 
-    img = cv2.imread("/home/yuan/data/HisMap/SMOLdata/hameln/imgs/3821_1974_0_384.png")
-    pred_mask = apply_jet_colormap_transparent(img, pred_mask)
-    # pred_mask = (pred_mask * 255).astype(np.uint8)
-    cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/pred{label}.png", pred_mask)
+# industrial: 3821_2002_6144_8448, 3821_2002_5376_8064
+# sport: 3821_2002_6144_6912, 3821_2002_6144_7296
+
+# road1: 3821_2002_6144_8448, 3821_2002_5376_8064
+# road2: 3821_2002_6144_4608, 3821_2002_6144_384

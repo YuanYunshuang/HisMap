@@ -125,12 +125,24 @@ def masked_img():
     cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/crop_overlay.png", img)
 
 
+def count_fewshot_label():
+    path = "/home/yuan/data/HisMap/SMOLdata/fewshot/manual"
+    sheets = os.listdir(path)
+    for sheet in sheets:
+        label_files = [x for x in os.listdir(f"{path}/{sheet}") if x != f"{sheet}.png"]
+        for lf in label_files:
+            L = cv2.imread(f"{path}/{sheet}/{lf}", cv2.IMREAD_UNCHANGED)
+            N = L.shape[0] * L.shape[1]
+            n = (L > 0).sum()
+            print(os.path.basename(lf), n, n / N * 100)
+
 
 
 if __name__ == '__main__':
     # plot_sam_clip_result()
     # label_to_mask("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_768_4608.png", 3)
     # summarize_dataset("/home/yuan/data/HisMap/SMOLdata/all.txt")
-    label_to_rgb("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_2688_1152.png")
-    crop_img_from_plot("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/2/inf_plots/hameln.3821_1974_2688_1152.png")
-    masked_img()
+    # label_to_rgb("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_2688_1152.png")
+    # crop_img_from_plot("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/2/inf_plots/hameln.3821_1974_2688_1152.png")
+    # masked_img()
+    count_fewshot_label()

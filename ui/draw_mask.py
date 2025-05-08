@@ -31,7 +31,7 @@ class ImageViewer(QWidget):
         self.current_polygon.clear()
         self.update()
 
-    def paintEvent(self, event):
+    def paintEvent_(self, event):
         if self.pixmap:
             painter = QPainter(self)
             painter.scale(self.scale, self.scale)
@@ -53,13 +53,36 @@ class ImageViewer(QWidget):
                 painter.setPen(QPen(Qt.green, 5))
                 painter.drawPoint(self.current_polygon[0])
 
+    def paintEvent(self, event):
+        if self.pixmap:
+            painter = QPainter(self)
+            painter.translate(self.offset)
+            painter.scale(self.scale, self.scale)
+            painter.drawPixmap(0, 0, self.pixmap)
+
+            # Draw polygons relative to offset + scale
+            painter.translate(0, 0)  # no extra translation needed
+
+            for poly in self.polygons:
+                painter.setPen(QPen(Qt.red, 2))
+                painter.setBrush(QColor(255, 0, 0, 127))
+                painter.drawPolygon(QPolygonF(poly))
+
+            if len(self.current_polygon) > 1:
+                painter.setPen(QPen(Qt.green, 2, Qt.DashLine))
+                painter.setBrush(QColor(0, 255, 0, 127))
+                painter.drawPolygon(QPolygonF(self.current_polygon))
+            elif len(self.current_polygon) == 1:
+                painter.setPen(QPen(Qt.green, 5))
+                painter.drawPoint(self.current_polygon[0])
+
     def wheelEvent(self, event):
         angle = event.angleDelta().y()
         factor = 1.1 if angle > 0 else 0.9
         self.scale *= factor
         self.update()
 
-    def mousePressEvent(self, event):
+    def mousePressEvent_(self, event):
         pos = event.pos() / self.scale
         if event.button() == Qt.LeftButton:
             self.current_polygon.append(QPointF(pos))
@@ -68,6 +91,35 @@ class ImageViewer(QWidget):
             self.polygons.append(list(self.current_polygon))
             self.current_polygon.clear()
             self.update()
+
+    def mousePressEvent(self, event):
+        pos = (event.pos() - self.offset) / self.scale
+        if event.button() == Qt.LeftButton:
+            if event.modifiers() == Qt.NoModifier:  # no modifier: add point
+                self.current_polygon.append(QPointF(pos))
+                self.update()
+            else:
+                # left-click + any modifier → fallback to point adding
+                pass
+        elif event.button() == Qt.RightButton and len(self.current_polygon) == 0:
+            self.last_mouse_pos = event.pos()
+            self.panning = True
+        elif event.button() == Qt.RightButton and len(self.current_polygon) >= 3:
+            self.polygons.append(list(self.current_polygon))
+            self.current_polygon.clear()
+            self.update()
+
+    def mouseMoveEvent(self, event):
+        if self.panning and self.last_mouse_pos:
+            delta = event.pos() - self.last_mouse_pos
+            self.offset += delta
+            self.last_mouse_pos = event.pos()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self.panning = False
+            self.last_mouse_pos = None
 
     def keyPressEvent(self, event):
         if (event.key() == Qt.Key_Z and event.modifiers() == Qt.ControlModifier) or event.key() == Qt.Key_Backspace:

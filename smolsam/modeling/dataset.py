@@ -16,7 +16,7 @@ except:
 
 
 class MapDataset(Dataset):
-    def __init__(self, data_root, mode="train", fix_src_lbl=0):
+    def __init__(self, data_root, mode="train", fix_src_lbl=0, fg_ratio=0.01):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -50,8 +50,10 @@ class MapDataset(Dataset):
         self.data_root = data_root
         self.mode = mode
         self.fix_src_lbl = fix_src_lbl
+        self.fg_ratio = fg_ratio
 
-        with open(os.path.join(self.data_root, "dinfo.json")) as f:
+        info_file = "dinfo_fewshot.json" if mode == "fewshot" else "dinfo.json"
+        with open(os.path.join(self.data_root, info_file)) as f:
             self.stats = json.load(f)
         with open(os.path.join(self.data_root, f"{mode}.txt")) as f:
             self.file_list = [x.strip() for x in f.readlines()]
@@ -74,7 +76,7 @@ class MapDataset(Dataset):
                     continue
                 if 0 < self.fix_src_lbl != int(k):
                     continue
-                if 0.1 < v < 0.9 :
+                if self.fg_ratio < v < 0.9 :
                     loading_list_src[key][int(k)].append(name)
 
         # omit evaluation for map sheets that does not contian fixed target class
@@ -93,7 +95,7 @@ class MapDataset(Dataset):
 
     def select_tgt_cls(self, tgt_info, tgt_map_key):
         # available classes of the current target image
-        tgt_cls = [int(k) for k, v in tgt_info.items() if v > 0.1 and int(k) > 0]
+        tgt_cls = [int(k) for k, v in tgt_info.items() if v > self.fg_ratio and int(k) > 0]
 
         if len(tgt_cls) > 0 and (np.random.random() < 0.75 or len(tgt_cls) == 4):
             # p probability to select a cls that is present in both src and tgt image
@@ -187,10 +189,12 @@ class MapTransformTrain:
 
 class MapTransformTest:
     def __init__(self):
+        color_jitter = 0.05
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
         self.lbl_transforms = v2.Compose([
@@ -198,10 +202,14 @@ class MapTransformTest:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
-    def __call__(self, img, lbl):
+    def __call__(self, img, lbl=None):
         img = self.img_transforms(img)
-        lbl = self.lbl_transforms(lbl)
-        return img, lbl.squeeze()
+        if lbl is not None:
+            lbl = self.lbl_transforms(lbl).squeeze()
+            return img, lbl
+        else:
+            return img
+
 
 
 def get_dataloader(root_dir, batch_size=4, mode='train'):

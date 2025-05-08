@@ -70,7 +70,7 @@ def setup_parser():
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
-    parser.add_argument("--lr", type=float, default=1e-5, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("--lr", type=float, default=5e-5, metavar="LR", help="learning rate (absolute lr)")
     parser.add_argument("--warmup-epochs", type=int, default=0, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("--use-wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("--use-amp", action="store_true", default=False, help="use amp")
@@ -81,7 +81,7 @@ def setup_parser():
     # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
     parser.add_argument("--disable-lr-scheduler", action="store_true", default=False)
     parser.add_argument("--from-scratch", action="store_true", default=False)
-    parser.add_argument("--data-mode", type=str, default="train50", help="[train50 | train75] percentage of data split for training.")
+    parser.add_argument("--data-mode", type=str, default="train50", help="[train50 | train75 | fewshot] percentage of data split for training.")
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -166,9 +166,10 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            start_epoch = checkpoint["epoch"] + 1
             mapsam.load_state_dict(checkpoint["model"])
-            optimizer.load_state_dict(checkpoint["optimizer"])
+            if not args.data_mode == "fewshot":
+                optimizer.load_state_dict(checkpoint["optimizer"])
+                start_epoch = checkpoint["epoch"] + 1
     if args.use_amp:
         scaler = torch.cuda.amp.GradScaler()
 

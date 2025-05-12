@@ -35,16 +35,16 @@ os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
 
 
 prediction_src_default = {
-    # 1: "0_0",
+    1: "0_0",
     # 2: "384_1536",
     # 3: "0_768",
-    4: "3840_1920",
+    # 4: "3840_1920",
 }
 
 test_sheets = [
     # '3922_1898',
     '3922_1974',
-    '3922_1982',
+    # '3922_1982',
 ]
 
 
@@ -75,14 +75,16 @@ def main(args):
     else:
         win = None
     if args.output_dir is None:
-        args.output_dir = os.path.join(os.path.dirname(args.checkpoint), "map_pred")
+        args.output_dir = os.path.join(os.path.dirname(args.checkpoint), "map_pred_tmp")
     os.makedirs(args.output_dir, exist_ok=True)
 
     map_predictor = MapPredictor(args.checkpoint)
     map_predictor.set_src(args.source_image, args.source_image.replace("imgs", "lbls"), args.label_index)
 
     # Prepare tgt map
-    tgt_map = read_tiff(args.target_map)[..., ::-1]
+    tgt_map = read_tiff(args.target_map)
+    if args.label_index > 1:
+        tgt_map = tgt_map[..., ::-1]
     if len(tgt_map.shape) == 2:
         tgt_map = tgt_map[:, :, np.newaxis].repeat(3, axis=2)
     sheet_name = os.path.basename(args.target_map).split('.')[0]
@@ -123,7 +125,7 @@ def main(args):
     if args.visualize:
         cv2.destroyWindow("mask")
 
-    cv2.imwrite(os.path.join(args.output_dir, f"{sheet_name}_mask{args.label_index}.png"), mask_sheet)
+    cv2.imwrite(os.path.join(args.output_dir, f"{sheet_name}_mask{args.label_index}.png"), (mask_sheet * 255).astype(np.uint8))
     map_vis_merged = apply_jet_colormap_transparent(tgt_map[::4, ::4], mask_sheet[::4, ::4])
     cv2.imwrite(os.path.join(args.output_dir, f"{sheet_name}_mask{args.label_index}_vis.png"), map_vis_merged)
 

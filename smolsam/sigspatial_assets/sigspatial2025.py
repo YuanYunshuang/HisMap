@@ -137,6 +137,31 @@ def count_fewshot_label():
             print(os.path.basename(lf), n, n / N * 100)
 
 
+def generate_masked_sheet():
+    from smolsam.utils.map_utils import read_tiff
+    from smolsam.utils.vis import apply_jet_colormap_transparent
+
+    s = 10
+    sheet = "3922_1898"
+    map_path = f"/home/yuan/data/HisMap/LGLN/dataset/test/maps/{sheet}.tif"
+    label_path = f"/home/yuan/data/HisMap/LGLN/dataset/test/label/{sheet}.png"
+    # MAP = read_tiff(map_path)[::s, ::s, ::-1]
+    MAP = read_tiff(map_path)[::s, ::s, None].repeat(3, axis=2)
+    LABEL = cv2.imread(label_path, cv2.IMREAD_UNCHANGED) / 50
+    for idx in range(4, 5):
+        pred_path = f"/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/map_pred/{sheet}_mask{idx}.png"
+        PRED = cv2.imread(pred_path, cv2.IMREAD_UNCHANGED).astype(float) / 255
+
+        if idx == 4:
+            L = np.logical_or(LABEL == 4, LABEL == 5)
+        else:
+            L = LABEL == idx
+
+        pred_mask = apply_jet_colormap_transparent(MAP, PRED[::s, ::s])
+        gt_mask = apply_jet_colormap_transparent(MAP, L[::s, ::s])
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/{os.path.basename(pred_path)}", pred_mask)
+        cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/{os.path.basename(pred_path).replace('mask', 'gt')}", gt_mask)
+
 
 if __name__ == '__main__':
     # plot_sam_clip_result()
@@ -145,4 +170,9 @@ if __name__ == '__main__':
     # label_to_rgb("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_2688_1152.png")
     # crop_img_from_plot("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/2/inf_plots/hameln.3821_1974_2688_1152.png")
     # masked_img()
-    count_fewshot_label()
+    # count_fewshot_label()
+    generate_masked_sheet()
+
+    img = cv2.imread("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/map_pred/3922_1898_mask4_vis.png")
+    img = cv2.resize(img, (int(img.shape[0] / 2.5), int(img.shape[1] / 2.5)))
+    cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/3922_1898_mask4.png", img)

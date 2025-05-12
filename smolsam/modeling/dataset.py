@@ -189,12 +189,10 @@ class MapTransformTrain:
 
 class MapTransformTest:
     def __init__(self):
-        color_jitter = 0.05
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
         self.lbl_transforms = v2.Compose([

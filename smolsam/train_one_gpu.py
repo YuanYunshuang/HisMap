@@ -86,6 +86,7 @@ def setup_parser():
     parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
     parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
     parser.add_argument("--disable-runid", action="store_true", default=False)
+    parser.add_argument("--save-dora-only", type=bool, default=True)
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -195,7 +196,7 @@ def main():
             cur_lr = optimizer.param_groups[0]["lr"]
 
         pbar = tqdm(train_dataloader)
-        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})
+        pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})
         for step, data in enumerate(pbar):
             if args.lr_scheduler == 'exp':
                 cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
@@ -224,14 +225,13 @@ def main():
                 optimizer.zero_grad()
 
             epoch_loss += loss.item()
-            iter_num += 1
-
-            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
+            pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
 
             if (step + 1) % 10 == 0:
-                logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
+                logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
+            iter_num += 1
 
         epoch_loss /= max(step, 1)
         losses.append(epoch_loss)
@@ -239,9 +239,15 @@ def main():
         if args.use_wandb:
             wandb.log({"epoch_loss": epoch_loss})
         logger.info(f'Time: {datetime.now().strftime("%Y%m%d-%H%M")}, Epoch: {epoch}, Loss: {epoch_loss}')
+
+        # get saving parameters
+        if args.save_dora_only:
+            state_dict = mapsam.save_dora_parameters()
+        else:
+            state_dict = mapsam.state_dict()
         ## save the latest model
         checkpoint = {
-            "model": mapsam.state_dict(),
+            "dora-model": state_dict,
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
         }
@@ -250,7 +256,7 @@ def main():
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             checkpoint = {
-                "model": mapsam.state_dict(),
+                "model": state_dict,
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }

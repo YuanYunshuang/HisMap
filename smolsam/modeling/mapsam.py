@@ -31,6 +31,19 @@ class MapSAM(nn.Module):
         else:
             self.prompt_encoder = prompt_encoder
 
+    def save_dora_parameters(self) -> dict:
+        state_dict = self.state_dict()
+        filtered_state_dict = {}
+        for key, value in state_dict.items():
+            if 'prompt_encoder' in key or 'mask_decoder' in key:
+                filtered_state_dict[key] = value
+            elif ('qkv' in key) and ('m_' in key or 'lora' in key):
+                    filtered_state_dict[key] = value
+        return filtered_state_dict
+
+    def load_dora_parameters(self, state_dict: dict) -> None:
+        self.load_state_dict(state_dict)
+
     def forward(self, img_src, lbl_src, img_tgt):
         image = torch.cat([img_src, img_tgt], dim=0)
         image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)

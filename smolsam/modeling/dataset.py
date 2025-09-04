@@ -96,6 +96,9 @@ class MapDataset(Dataset):
             print(f"{len(self.file_list)} images out of {total_file_num} are selected for evaluation of the fixed src label {self.fix_src_lbl}.")
         self.loading_list = loading_list_src
 
+        while len(self.file_list) < 160:
+            self.file_list.extend(self.file_list)
+
     def select_tgt_cls(self, tgt_info, tgt_map_key):
         # available classes of the current target image
         tgt_cls = [int(k) for k, v in tgt_info.items() if v > self.fg_ratio and int(k) > 0]

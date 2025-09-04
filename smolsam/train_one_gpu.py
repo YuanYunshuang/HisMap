@@ -166,6 +166,7 @@ def main():
 
     # %% train
     num_epochs = max(args.num_epochs, args.max_iterations // len(train_dataloader))
+    max_iterations = max(args.max_iterations, num_epochs * len(train_dataloader))
     warmup_epochs = round(args.warmup_itrs / len(train_dataloader))
     logger.info(f"# epochs: {num_epochs}")
     iter_num = 1
@@ -200,7 +201,7 @@ def main():
         for step, data in enumerate(pbar):
             if args.lr_scheduler == 'exp':
                 cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
-                                                        max_itr=args.max_iterations,
+                                                        max_itr=max_iterations,
                                                         warmup_itrs=args.warmup_itrs)
             optimizer.zero_grad()
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]

@@ -2,21 +2,6 @@
 
 LOG_PATH="/mars/projects20/HisMap/smolsam/logs"
 DATA_PATH="/koko/datasets/smolseg"
-## TRAIN
-#PYTHONPATH=. python smolsam/train_one_gpu.py \
-#-d /home/yuan/data/HisMap/SMOLdata \
-#--data-info siegfried_train \
-#--data-mode train_siegfried \
-#-t siegfried
-
-## TEST
-#for d in "railway" "vineyard"; do
-#  PYTHONPATH=. python smolsam/inference.py \
-#  -w /home/yuan/code/HisMap/smolsam/logs/siegfried/medsam_model_best.pth \
-#  -o /home/yuan/code/HisMap/smolsam/logs/siegfried/results \
-#  --data-info siegfried_test \
-#  --data-mode test_siegfried_$d
-#done
 
 
 for d in "railway" "railway_partial_10" "railway_partial_1" "railway_fewshot10"; do

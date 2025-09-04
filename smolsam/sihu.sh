@@ -1,7 +1,7 @@
 #!/bin/bash
 
 LOG_PATH="/mars/projects20/HisMap/smolsam/logs"
-DATA_PATH="/koko/datasets/smolseg"
+DATA_PATH="/koko/datasets/Siegfried_Railway_Vineyard/smolseg"
 
 
 for d in "railway" "railway_partial_10" "railway_partial_1" "railway_fewshot10"; do

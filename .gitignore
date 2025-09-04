@@ -2,7 +2,9 @@ train_log
 src/model
 .idea
 *__pycache__*
-data
+data/llm
+data/**.pkl
+data/**.json
 logs
 map_sam/work_dir
 map_sam/logs

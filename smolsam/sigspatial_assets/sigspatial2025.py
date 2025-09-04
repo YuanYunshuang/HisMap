@@ -170,9 +170,9 @@ if __name__ == '__main__':
     # label_to_rgb("/home/yuan/data/HisMap/SMOLdata/hameln/lbls/3821_1974_2688_1152.png")
     # crop_img_from_plot("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/2/inf_plots/hameln.3821_1974_2688_1152.png")
     # masked_img()
-    # count_fewshot_label()
-    generate_masked_sheet()
-
-    img = cv2.imread("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/map_pred/3922_1898_mask4_vis.png")
-    img = cv2.resize(img, (int(img.shape[0] / 2.5), int(img.shape[1] / 2.5)))
-    cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/3922_1898_mask4.png", img)
+    count_fewshot_label()
+    # generate_masked_sheet()
+    #
+    # img = cv2.imread("/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/map_pred/3922_1898_mask4_vis.png")
+    # img = cv2.resize(img, (int(img.shape[0] / 2.5), int(img.shape[1] / 2.5)))
+    # cv2.imwrite(f"{os.environ.get('HOME')}/Downloads/3922_1898_mask4.png", img)

@@ -11,22 +11,17 @@ import logging
 
 join = os.path.join
 from tqdm import tqdm
-from skimage import transform
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import monai
-import torch.nn.functional as F
 import argparse
-import random
-from datetime import datetime
-import shutil
-import glob
+
 
 from smolsam.modeling.dataset import MapDataset
 from smolsam.modeling.mapsam import MapSAM
+from smolsam.modeling.dora import  DoRA_Sam
 from smolsam import sam_model_registry
-from smolsam.utils.vis import vis_train, save_results
 from smolsam.tools.eval import Evaluator
 
 # set seeds
@@ -68,10 +63,10 @@ def setup_parser():
     parser.add_argument("-s", "--save-result", action="store_true", default=False)
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
-    parser.add_argument("--data-split", type=str, default='test')
+    parser.add_argument("--data-mode", type=str, default='test')
+    parser.add_argument("--data-info", type=str, default='dinfo')
     args = parser.parse_args()
 
-    args.debug = True
     return args
 
 
@@ -94,9 +89,13 @@ def eval(pred, target, thresh=0.5):
 
 
 def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
+    if args.save_result:
+        from smolsam.utils.vis import save_results
+    if args.debug:
+        from smolsam.utils.vis import vis_train
     losses = []
     evals = []
-    test_dataset = MapDataset(args.root_dir, mode=args.data_split, fix_src_lbl=label)
+    test_dataset = MapDataset(args.root_dir, mode=args.data_mode, info_file=args.data_info, fix_src_lbl=label)
     num_samples = len(test_dataset)
 
     logger.info(f"# testing samples: {num_samples}")
@@ -137,10 +136,10 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
     avg_eval = evaluator.eval()
     out_info = \
         f"Loss: {avg_loss:.6f}\n" + \
-        f"IoU (FG): {avg_eval[0]:.3f}\n" + \
-        f"Precision (FG): {avg_eval[1]:.3f}\n" + \
-        f"Recall (FG): {avg_eval[2]:.3f}\n" + \
-        f"Accuracy (BG&FG): {avg_eval[3]:.3f}\n"
+        f"IoU (FG): {avg_eval[0]*100:.2f}\n" + \
+        f"Precision (FG): {avg_eval[1]*100:.2f}\n" + \
+        f"Recall (FG): {avg_eval[2]*100:.2f}\n" + \
+        f"Accuracy (BG&FG): {avg_eval[3]*100:.2f}\n"
     logger.info(out_info)
     print(out_info)
 
@@ -156,12 +155,13 @@ def main():
     # %% set up model
     os.makedirs(out_dir, exist_ok=True)
     logger = logging.getLogger("SMOL-Seg")
-    logging.basicConfig(filename=join(out_dir, "test.txt"), level=logging.INFO)
+    logging.basicConfig(filename=join(out_dir, "test.txt"), level=logging.INFO, filemode="a")
 
     sam_model = sam_model_registry[args.model_type]()
+    dora_sam = DoRA_Sam(sam_model, 4)
     mapsam = MapSAM(
-        image_encoder=sam_model.image_encoder,
-        mask_decoder=sam_model.mask_decoder
+        image_encoder=dora_sam.sam.image_encoder,
+        mask_decoder=dora_sam.sam.mask_decoder,
     ).to(device)
     mapsam.eval()
 
@@ -177,7 +177,13 @@ def main():
     mapsam.load_state_dict(checkpoint["model"])
 
     # %% test
-    for label in [1, 2, 3, 4]:
+    if 'siegfried_railway' in args.data_mode:
+        labels = [1]
+    elif 'siegfried_vineyard' in args.data_mode:
+        labels = [2]
+    else:
+        labels = [1, 2, 3, 4]
+    for label in labels:
         single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 
 

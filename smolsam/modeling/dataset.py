@@ -1,13 +1,10 @@
 import os
-import glob
-from random import random
 
 import cv2
 import torch
 import numpy as np
 import json
 
-from dash.dash_table.FormatTemplate import percentage
 from torch.utils.data import Dataset
 try:
     from torchvision.transforms import v2
@@ -16,7 +13,7 @@ except:
 
 
 class MapDataset(Dataset):
-    def __init__(self, data_root, mode="train", fix_src_lbl=0, fg_ratio=0.01):
+    def __init__(self, data_root, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.01):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -26,6 +23,8 @@ class MapDataset(Dataset):
             The root directory of the dataset containing all related files.
         mode: str
             Indicates the mode in which the dataset is being used. Default is "train".
+        info_file: str
+            Path to the json file containing the dataset information.
         fix_src_lbl: bool
             A flag used to determine whether source labels should be fixed. Default is 0:not fixed.
             Other options: 1: fixed to 1, 2: fixed to 2, 3: fixed to 3, 4: fixed to 4.
@@ -52,11 +51,15 @@ class MapDataset(Dataset):
         self.fix_src_lbl = fix_src_lbl
         self.fg_ratio = fg_ratio
 
-        info_file = "dinfo_fewshot.json" if mode == "fewshot" else "dinfo.json"
+        if info_file is None:
+            info_file = "dinfo_fewshot.json" if mode == "fewshot" else "dinfo.json"
+        else:
+            info_file = f"dinfo_{info_file}.json"
         with open(os.path.join(self.data_root, info_file)) as f:
             self.stats = json.load(f)
         with open(os.path.join(self.data_root, f"{mode}.txt")) as f:
             self.file_list = [x.strip() for x in f.readlines()]
+            self.stats = {k: v for k, v in self.stats.items() if k in self.file_list}
 
         self.transform = MapTransformTrain() if 'train' in mode else MapTransformTest()
         print(f"number of images: {len(self.file_list)}")
@@ -79,7 +82,7 @@ class MapDataset(Dataset):
                 if self.fg_ratio < v < 0.9 :
                     loading_list_src[key][int(k)].append(name)
 
-        # omit evaluation for map sheets that does not contian fixed target class
+        # omit evaluation for map sheets that does not contain fixed target class
         if self.fix_src_lbl > 0:
             invalid_map_key = []
             for k, v in loading_list_src.items():
@@ -144,9 +147,9 @@ class MapDataset(Dataset):
 
     def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl):
         cv2.imshow('src_img', src_img.numpy().transpose(1, 2, 0))
-        cv2.imshow('src_lbl', src_lbl.astype(np.uint8) * 255)
+        cv2.imshow('src_lbl', src_lbl.numpy().astype(np.uint8) * 255)
         cv2.imshow('tgt_img', tgt_img.numpy().transpose(1, 2, 0))
-        cv2.imshow('tgt_lbl', tgt_lbl.astype(np.uint8) * 255)
+        cv2.imshow('tgt_lbl', tgt_lbl.numpy().astype(np.uint8) * 255)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 

@@ -77,4 +77,5 @@ def eval_map_sheet():
         print("UNET:",  iou, prec, rec)
 
 
-eval_map_sheet()
+if __name__ == "__main__":
+    eval_map_sheet()

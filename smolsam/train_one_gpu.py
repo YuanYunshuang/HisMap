@@ -25,9 +25,10 @@ import glob
 
 from smolsam.modeling.dataset import MapDataset
 from smolsam.modeling.mapsam import MapSAM
+from smolsam.modeling.dora import  DoRA_Sam
 from smolsam import sam_model_registry
 from smolsam.utils.vis import vis_train
-from smolsam.utils.train_utils import adjust_learning_rate_cosine
+from smolsam.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
 
 # set seeds
 torch.manual_seed(2023)
@@ -65,13 +66,14 @@ def setup_parser():
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output_dir", type=str, default=f"{cur_path}/logs")
     # train
-    parser.add_argument("-e", "--num_epochs", type=int, default=100)
+    parser.add_argument("-e", "--num_epochs", type=int, default=160)
+    parser.add_argument("-itr", "--max_iterations", type=int, default=10000)
     parser.add_argument("-bs", "--batch_size", type=int, default=16)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
     parser.add_argument("--lr", type=float, default=5e-5, metavar="LR", help="learning rate (absolute lr)")
-    parser.add_argument("--warmup-epochs", type=int, default=0, metavar="warmup epochs", help="total number of warmup epochs")
+    parser.add_argument("--warmup-itrs", type=int, default=1000, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("--use-wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("--use-amp", action="store_true", default=False, help="use amp")
     parser.add_argument("--resume", type=str, default="", help="Resuming training from checkpoint")
@@ -79,9 +81,11 @@ def setup_parser():
     parser.add_argument("--plot-loss", action="store_true", default=False)
     parser.add_argument("--debug", action="store_true", default=False)
     # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
-    parser.add_argument("--disable-lr-scheduler", action="store_true", default=False)
+    parser.add_argument("--lr-scheduler", type=str, default="cosine", help="learning rate scheduler: cosine, exp or none")
     parser.add_argument("--from-scratch", action="store_true", default=False)
-    parser.add_argument("--data-mode", type=str, default="train50", help="[train50 | train75 | fewshot] percentage of data split for training.")
+    parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
+    parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
+    parser.add_argument("--disable-runid", action="store_true", default=False)
     args = parser.parse_args()
 
     if args.use_wandb:
@@ -104,7 +108,10 @@ def setup_parser():
 def main():
     args = setup_parser()
     run_id = datetime.now().strftime("%Y%m%d-%H%M")
-    model_save_path = join(args.output_dir, args.task_name + "-" + run_id)
+    if args.disable_runid:
+        model_save_path = join(args.output_dir, args.task_name)
+    else:
+        model_save_path = join(args.output_dir, args.task_name + "-" + run_id)
     device = torch.device(args.device)
     # %% set up model
     os.makedirs(model_save_path, exist_ok=True)
@@ -118,9 +125,10 @@ def main():
         args.checkpoint = None
         args.warmup_epochs = 1
     sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
+    dora_sam = DoRA_Sam(sam_model, 4)
     mapsam = MapSAM(
-        image_encoder=sam_model.image_encoder,
-        mask_decoder=sam_model.mask_decoder
+        image_encoder=dora_sam.sam.image_encoder,
+        mask_decoder=dora_sam.sam.mask_decoder,
     ).to(device)
     mapsam.train()
 
@@ -144,14 +152,8 @@ def main():
     # cross entropy loss
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
-    # %% train
-    num_epochs = args.num_epochs
-    iter_num = 0
-    losses = []
-    lrs = []
-    best_loss = 1e10
-    train_dataset = MapDataset(args.root_dir, mode=args.data_mode)
-
+    # dataset
+    train_dataset = MapDataset(args.root_dir, mode=args.data_mode, info_file=args.data_info)
     logger.info(f"# training samples: {len(train_dataset)}")
     train_dataloader = DataLoader(
         train_dataset,
@@ -161,27 +163,40 @@ def main():
         pin_memory=True,
     )
 
+    # %% train
+    num_epochs = max(args.num_epochs, args.max_iterations // len(train_dataloader))
+    warmup_epochs = round(args.warmup_itrs / len(train_dataloader))
+    logger.info(f"# epochs: {num_epochs}")
+    iter_num = 0
+    losses = []
+    lrs = []
+    best_loss = 1e10
     start_epoch = 0
+
     if args.resume is not None:
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
             mapsam.load_state_dict(checkpoint["model"])
-            if not args.data_mode == "fewshot":
+            if not "fewshot" in args.data_mode:
                 optimizer.load_state_dict(checkpoint["optimizer"])
                 start_epoch = checkpoint["epoch"] + 1
     if args.use_amp:
         scaler = torch.cuda.amp.GradScaler()
 
-    logger.info(">>>>>>>>>>>>>>>>>>TART TRAINING <<<<<<<<<<<<<<<<<<")
+    logger.info(">>>>>>>>>>>>>>>>>>START TRAINING <<<<<<<<<<<<<<<<<<")
     for epoch in range(start_epoch, num_epochs):
         epoch_loss = 0
-        if args.disable_lr_scheduler:
-            cur_lr = optimizer.param_groups[0]["lr"]
-        else:
+        if args.lr_scheduler == 'cosine':
             cur_lr = adjust_learning_rate_cosine(optimizer, base_lr=args.lr, epoch=epoch,
-                                                 total_epoch=num_epochs,
-                                                 warmup_epochs=args.warmup_epochs)
+                                                 total_epoch=args.num_epochs,
+                                                 warmup_epochs=warmup_epochs)
+        elif args.lr_scheduler == 'exp':
+            cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
+                                                    max_itr=args.max_iterations,
+                                                    warmup_itrs=args.warmup_itrs)
+        else:
+            cur_lr = optimizer.param_groups[0]["lr"]
 
         pbar = tqdm(train_dataloader)
         pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})
@@ -218,7 +233,7 @@ def main():
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
 
-        epoch_loss /= step
+        epoch_loss /= max(step, 1)
         losses.append(epoch_loss)
         lrs.append(cur_lr)
         if args.use_wandb:
@@ -240,6 +255,14 @@ def main():
                 "epoch": epoch,
             }
             torch.save(checkpoint, join(model_save_path, "medsam_model_best.pth"))
+        # ## save the intermediate model
+        # if (epoch + 1) % 20 == 0:
+        #     checkpoint = {
+        #         "model": mapsam.state_dict(),
+        #         "optimizer": optimizer.state_dict(),
+        #         "epoch": epoch,
+        #     }
+        #     torch.save(checkpoint, join(model_save_path, f"medsam_model_ep{epoch+1}.pth"))
 
         # save loss
         with open(join(model_save_path, "medsam_loss.txt"), "w") as f:

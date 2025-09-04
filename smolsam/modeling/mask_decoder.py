@@ -98,7 +98,7 @@ class MaskDecoder(nn.Module):
         """
         masks, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
-            image_pe=image_pe,
+            image_pe=image_pe[:, :, :image_embeddings.shape[-2], :image_embeddings.shape[-1]],
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
         )

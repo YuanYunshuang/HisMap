@@ -20,3 +20,14 @@ def adjust_learning_rate_cosine(optimizer, base_lr, epoch, total_epoch, warmup_e
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
+
+
+def adjust_learning_rate_exp_decay(optimizer, base_lr, itr, max_itr, warmup_itrs):
+    """Decays the learning rate with half-cycle cosine after warmup"""
+    if itr < warmup_itrs:
+        lr = base_lr * itr / warmup_itrs
+    else:
+        lr = base_lr * (1. - (itr - warmup_itrs) / max_itr) ** 0.9
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    return lr

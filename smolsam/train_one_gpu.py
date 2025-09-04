@@ -167,7 +167,7 @@ def main():
     num_epochs = max(args.num_epochs, args.max_iterations // len(train_dataloader))
     warmup_epochs = round(args.warmup_itrs / len(train_dataloader))
     logger.info(f"# epochs: {num_epochs}")
-    iter_num = 0
+    iter_num = 1
     losses = []
     lrs = []
     best_loss = 1e10
@@ -191,16 +191,20 @@ def main():
             cur_lr = adjust_learning_rate_cosine(optimizer, base_lr=args.lr, epoch=epoch,
                                                  total_epoch=args.num_epochs,
                                                  warmup_epochs=warmup_epochs)
-        elif args.lr_scheduler == 'exp':
+        elif args.lr_scheduler == 'none':
             cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
                                                     max_itr=args.max_iterations,
                                                     warmup_itrs=args.warmup_itrs)
         else:
-            cur_lr = optimizer.param_groups[0]["lr"]
+            raise NotImplementedError
 
         pbar = tqdm(train_dataloader)
         pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})
         for step, data in enumerate(pbar):
+            if args.lr_scheduler == 'exp':
+                cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
+                                                        max_itr=args.max_iterations,
+                                                        warmup_itrs=args.warmup_itrs)
             optimizer.zero_grad()
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
             if args.use_amp:

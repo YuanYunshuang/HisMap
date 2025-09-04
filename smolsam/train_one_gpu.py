@@ -191,9 +191,8 @@ def main():
             cur_lr = adjust_learning_rate_cosine(optimizer, base_lr=args.lr, epoch=epoch,
                                                  total_epoch=args.num_epochs,
                                                  warmup_epochs=warmup_epochs)
-        elif args.lr_scheduler == 'none':
+        else:
             cur_lr = optimizer.param_groups[0]["lr"]
-        else: pass
 
         pbar = tqdm(train_dataloader)
         pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})

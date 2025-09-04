@@ -192,11 +192,8 @@ def main():
                                                  total_epoch=args.num_epochs,
                                                  warmup_epochs=warmup_epochs)
         elif args.lr_scheduler == 'none':
-            cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
-                                                    max_itr=args.max_iterations,
-                                                    warmup_itrs=args.warmup_itrs)
-        else:
-            raise NotImplementedError
+            cur_lr = optimizer.param_groups[0]["lr"]
+        else: pass
 
         pbar = tqdm(train_dataloader)
         pbar.set_postfix({'Epoch/Step': f'{epoch}/0', 'LR': f'{cur_lr:e}', 'Loss': f'{0:.6f}'})

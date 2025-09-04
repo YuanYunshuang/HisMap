@@ -61,6 +61,7 @@ def setup_parser():
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     parser.add_argument("-bs", "--batch_size", type=int, default=32)
     parser.add_argument("-s", "--save-result", action="store_true", default=False)
+    parser.add_argument("--sam-ckpt", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--data-mode", type=str, default='test')
@@ -157,7 +158,7 @@ def main():
     logger = logging.getLogger("SMOL-Seg")
     logging.basicConfig(filename=join(out_dir, "test.txt"), level=logging.INFO, filemode="a")
 
-    sam_model = sam_model_registry[args.model_type]()
+    sam_model = sam_model_registry[args.model_type](args.sam_ckpt)
     dora_sam = DoRA_Sam(sam_model, 4)
     mapsam = MapSAM(
         image_encoder=dora_sam.sam.image_encoder,
@@ -174,7 +175,7 @@ def main():
     assert os.path.isfile(args.checkpoint)
     ## Map model to be loaded to specified single GPU
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    mapsam.load_state_dict(checkpoint["model"])
+    mapsam.load_dora_parameters(checkpoint["model"])
 
     # %% test
     if 'siegfried_railway' in args.data_mode:

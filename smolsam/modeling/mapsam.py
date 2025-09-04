@@ -42,7 +42,10 @@ class MapSAM(nn.Module):
         return filtered_state_dict
 
     def load_dora_parameters(self, state_dict: dict) -> None:
-        self.load_state_dict(state_dict)
+        full_state_dict = self.state_dict()
+        for key, value in state_dict.items():
+            full_state_dict[key] = value
+        self.load_state_dict(full_state_dict)
 
     def forward(self, img_src, lbl_src, img_tgt):
         image = torch.cat([img_src, img_tgt], dim=0)

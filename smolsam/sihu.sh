@@ -3,8 +3,15 @@
 LOG_PATH="/mars/projects20/HisMap/smolsam/logs"
 DATA_PATH="/koko/datasets/Siegfried_Railway_Vineyard/smolseg"
 
+d="railway"
+PYTHONPATH=. python smolsam/inference.py \
+-d $DATA_PATH \
+-w $LOG_PATH/siegfried_$d/medsam_model_best.pth \
+-o $LOG_PATH/siegfried_$d/results \
+--data-info siegfried_test \
+--data-mode test_siegfried_railway
 
-for d in "railway" "railway_partial_10" "railway_partial_1" "railway_fewshot10"; do
+for d in "railway_partial_10" "railway_partial_1" "railway_fewshot10"; do
   # TRAIN
   PYTHONPATH=. python smolsam/train_one_gpu.py \
   -d $DATA_PATH \
@@ -13,6 +20,7 @@ for d in "railway" "railway_partial_10" "railway_partial_1" "railway_fewshot10";
   -t siegfried_$d  --disable-runid --lr 5e-3 --lr-scheduler exp -e 10
   # TEST
   PYTHONPATH=. python smolsam/inference.py \
+  -d $DATA_PATH \
   -w $LOG_PATH/siegfried_$d/medsam_model_best.pth \
   -o $LOG_PATH/siegfried_$d/results \
   --data-info siegfried_test \
@@ -29,6 +37,7 @@ for d in "vineyard" "vineyard_fewshot10"; do
   -t siegfried_$d --disable-runid --lr 5e-3 --lr-scheduler exp -e 10
   # TEST
   PYTHONPATH=. python smolsam/inference.py \
+  -d $DATA_PATH \
   -w $LOG_PATH/siegfried_$d/medsam_model_best.pth \
   -o $LOG_PATH/siegfried_$d/results \
   --data-info siegfried_test \
@@ -45,6 +54,7 @@ PYTHONPATH=. python smolsam/train_one_gpu.py \
 -t siegfried_railway_$d --disable-runid --lr 5e-3 --lr-scheduler exp -e 10
 # TEST
 PYTHONPATH=. python smolsam/inference.py \
+-d $DATA_PATH \
 -w $LOG_PATH/siegfried_$d/medsam_model_best.pth \
 -o $LOG_PATH/siegfried_$d/results \
 --data-info siegfried_test \

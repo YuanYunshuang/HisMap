@@ -6,7 +6,7 @@ DATA_PATH="/home/yuan/data/HisMap/SMOLdata"
 
 d="vineyard_fewshot10"
 
-for x in "5000" "20000"; do
+for x in "30000" "40000"; do
   # TRAIN
   PYTHONPATH=. python smolsam/train_one_gpu.py \
   --resume $LOG_PATH/siegfried_railway/medsam_model_latest.pth \

@@ -71,7 +71,7 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
         axs[i, 4].imshow(pred_tgt[i])
 
     plt.tight_layout()
-    plt.savefig("/home/yuan/Downloads/vis_train.png")
+    plt.savefig("/home/yuan/Downloads/vis_train.jpg")
     plt.close()
 
 

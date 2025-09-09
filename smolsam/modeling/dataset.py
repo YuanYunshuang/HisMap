@@ -6,6 +6,7 @@ import numpy as np
 import json
 
 from torch.utils.data import Dataset
+from torchvision.transforms.v2 import functional as F
 try:
     from torchvision.transforms import v2
 except:
@@ -166,8 +167,30 @@ class MapDataset(Dataset):
         return src_img, src_lbl, tgt_img, tgt_lbl, aux
 
 
+class PadToTargetSize:
+    def __init__(self, target_size):
+        self.target_size = target_size
+
+    def __call__(self, image, label):
+        w, h = image.shape[1:]
+        pad_w = max(self.target_size - w, 0)
+        pad_h = max(self.target_size - h, 0)
+
+        # Compute padding (left, top, right, bottom)
+        left = pad_w // 2
+        top = pad_h // 2
+        right = pad_w - left
+        bottom = pad_h - top
+
+        # Pad image with 0
+        image = F.pad(image, [left, top, right, bottom], fill=0)
+        # Pad label with 255
+        label = F.pad(label, [left, top, right, bottom], fill=False)
+
+        return image, label
+
 class MapTransformTrain:
-    def __init__(self, rot_degrees=30, color_jitter=0.05):
+    def __init__(self, image_size=384, rot_degrees=30, color_jitter=0.05):
         self.geometric_transforms = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomVerticalFlip(p=0.5),
@@ -186,9 +209,14 @@ class MapTransformTrain:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
+        self.pad_transforms = v2.Compose([
+            PadToTargetSize(image_size),
+        ])
+
     def __call__(self, img, lbl):
         img = self.img_transforms(img)
         lbl = self.lbl_transforms(lbl)
+        img, lbl = self.pad_transforms(img, lbl)
         img, lbl = self.geometric_transforms(img, lbl)
         return img, lbl.squeeze()
 

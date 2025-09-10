@@ -66,10 +66,11 @@ def setup_parser():
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output_dir", type=str, default=f"{cur_path}/logs")
     # train
-    parser.add_argument("-e", "--num_epochs", type=int, default=160)
-    parser.add_argument("-itr", "--max_iterations", type=int, default=10000)
-    parser.add_argument("-bs", "--batch_size", type=int, default=16)
-    parser.add_argument("-nw", "--num_workers", type=int, default=4)
+    parser.add_argument("-r", "--dora-rank", type=int, default=4)
+    parser.add_argument("-e", "--num-epochs", type=int, default=160)
+    parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
+    parser.add_argument("-bs", "--batch-size", type=int, default=16)
+    parser.add_argument("-nw", "--num-workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
     parser.add_argument("--lr", type=float, default=5e-5, metavar="LR", help="learning rate (absolute lr)")
@@ -126,7 +127,7 @@ def main():
         args.checkpoint = None
         args.warmup_epochs = 1
     sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
-    dora_sam = DoRA_Sam(sam_model, 4)
+    dora_sam = DoRA_Sam(sam_model, args.dora_rank)
     mapsam = MapSAM(
         image_encoder=dora_sam.sam.image_encoder,
         mask_decoder=dora_sam.sam.mask_decoder,

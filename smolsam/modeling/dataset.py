@@ -242,9 +242,9 @@ class MapTransformTest:
     def __call__(self, img, lbl=None):
         img = self.img_transforms(img)
         if lbl is not None:
-            lbl = self.lbl_transforms(lbl).squeeze()
+            lbl = self.lbl_transforms(lbl)
             img, lbl = self.pad_transforms(img, lbl)
-            return img, lbl
+            return img, lbl.squeeze()
         else:
             img, lbl = self.pad_transforms(img, lbl)
             return img

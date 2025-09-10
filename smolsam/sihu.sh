@@ -12,18 +12,18 @@ DATA_PATH="/koko/datasets/SMOL"
 
 PYTHONPATH=. python smolsam/inference.py \
 -w $LOG_PATH/gauss_siegfried/medsam_model_best.pth \
--o $LOG_PATH/gauss_siegfried \
+-o $LOG_PATH/gauss_siegfried_100k \
 --data-info all \
 --data-mode test
 
 PYTHONPATH=. python smolsam/inference.py \
 -w $LOG_PATH/gauss_siegfried/medsam_model_best.pth \
--o $LOG_PATH/gauss_siegfried \
+-o $LOG_PATH/gauss_siegfried_100k \
 --data-info all \
 --data-mode siegfried_railway
 
 PYTHONPATH=. python smolsam/inference.py \
 -w $LOG_PATH/gauss_siegfried/medsam_model_best.pth \
--o $LOG_PATH/gauss_siegfried \
+-o $LOG_PATH/gauss_siegfried_100k \
 --data-info all \
 --data-mode siegfried_vineyard

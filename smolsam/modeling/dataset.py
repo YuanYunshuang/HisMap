@@ -185,7 +185,8 @@ class PadToTargetSize:
         # Pad image with 0
         image = F.pad(image, [left, top, right, bottom], fill=0)
         # Pad label with 255
-        label = F.pad(label, [left, top, right, bottom], fill=False)
+        if label is not None:
+            label = F.pad(label, [left, top, right, bottom], fill=False)
 
         return image, label
 
@@ -222,7 +223,7 @@ class MapTransformTrain:
 
 
 class MapTransformTest:
-    def __init__(self):
+    def __init__(self, image_size=384):
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
@@ -234,12 +235,18 @@ class MapTransformTest:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
+        self.pad_transforms = v2.Compose([
+            PadToTargetSize(image_size),
+        ])
+
     def __call__(self, img, lbl=None):
         img = self.img_transforms(img)
         if lbl is not None:
             lbl = self.lbl_transforms(lbl).squeeze()
+            img, lbl = self.pad_transforms(img, lbl)
             return img, lbl
         else:
+            img, lbl = self.pad_transforms(img, lbl)
             return img
 
 

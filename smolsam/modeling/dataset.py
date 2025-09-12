@@ -4,7 +4,6 @@ import cv2
 import torch
 import numpy as np
 import json
-
 from torch.utils.data import Dataset
 from torchvision.transforms.v2 import functional as F
 try:
@@ -248,7 +247,6 @@ class MapTransformTest:
         else:
             img, lbl = self.pad_transforms(img, lbl)
             return img
-
 
 
 def get_dataloader(root_dir, batch_size=4, mode='train'):

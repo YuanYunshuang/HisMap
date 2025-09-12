@@ -89,6 +89,20 @@ def eval(pred, target, thresh=0.5):
 
     return iou, prec, rec
 
+def crop_384_to_224(image):
+    return image[80:-80, 80:-80]
+
+def crop_96_to_56(image):
+    return image[20:-20, 20:-20]
+
+def crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred):
+    return (img_src[:, :, 80:-80, 80:-80],
+            lbl_src[:, 20:-20, 20:-20],
+            img_tgt[:, :, 80:-80, 80:-80],
+            lbl_tgt[:, 80:-80, 80:-80],
+            lbl_pred[:, :, 80:-80, 80:-80],
+            mapsam_pred[:, :, 80:-80, 80:-80])
+
 
 def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
     if args.save_result:
@@ -113,7 +127,7 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 
     logger.info(f">>>>>>>>>>>>>>>>>>TESTING LABEL {label}<<<<<<<<<<<<<<<<<<")
     print(f">>>>>>>>>>>>>>>>>>TESTING LABEL {label}<<<<<<<<<<<<<<<<<<")
-    with torch.no_grad():
+    with (torch.no_grad()):
         pbar = tqdm(train_dataloader)
         # pbar.set_postfix({'Progress': f'0/{num_samples}', 'Loss': f'{0:.6f}',
         #                   'IoU': f'{0:.3f}', 'Precision': f'{0:.3f}', 'Recall': f'{0:.3f}'})
@@ -125,11 +139,14 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
             lbl_pred = mapsam_pred.sigmoid()
             loss = (seg_loss(mapsam_pred, lbl_tgt.unsqueeze(1)) +
                     ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1)))
+            if "siegfried" in args.data_mode:
+                img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred = \
+                crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
             evaluator.add_sample(lbl_pred.squeeze(1), lbl_tgt)
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
             if args.save_result:
-                save_results(os.path.join(out_dir, str(label)), img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, meta['tgt_name'])
+                save_results(os.path.join(out_dir, f"{args.data_mode}_{str(label)}"), img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, meta['tgt_name'])
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
             losses.append(loss.item())
@@ -183,6 +200,8 @@ def main():
         labels = [1]
     elif 'siegfried_vineyard' in args.data_mode:
         labels = [2]
+    elif 'bayern' in args.data_mode:
+        labels = [1, 2, 4]
     else:
         labels = [1, 2, 3, 4]
     for label in labels:

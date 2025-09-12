@@ -18,7 +18,14 @@ PYTHONPATH=. python smolsam/inference.py \
 -w $LOG_PATH/"$TNAME"/medsam_model_best.pth \
 -o $LOG_PATH/"$TNAME" \
 --data-info all \
---data-mode test -r $RANK
+--data-mode test_hameln -r $RANK
+
+PYTHONPATH=. python smolsam/inference.py \
+-d $DATA_PATH \
+-w $LOG_PATH/"$TNAME"/medsam_model_best.pth \
+-o $LOG_PATH/"$TNAME" \
+--data-info all \
+--data-mode test_bayern -r $RANK
 
 PYTHONPATH=. python smolsam/inference.py \
 -d $DATA_PATH \

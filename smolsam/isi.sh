@@ -1,7 +1,9 @@
 #!/bin/bash
 
-LOG_PATH="/home/yuan/code/HisMap/smolsam/logs"
+LOG_PATH="/koko/train_out/HisMap/SMOL/gauss_siegfried"
+#LOG_PATH="/home/yuan/code/HisMap/smolsam/logs"
 DATA_PATH="/home/yuan/data/HisMap/SMOLdata"
+TNAME="gauss_siegfried_e200_r16"
 
 
 #d="vineyard_fewshot10"
@@ -36,21 +38,21 @@ DATA_PATH="/home/yuan/data/HisMap/SMOLdata"
 #--data-info all \
 #--data-mode test_siegfried_vineyard
 
-for d in "hameln" "bayern"; do
+for d in "hameln" "bayern" "siegfried_railway" "siegfrid_vineyard"; do
 # TRAIN
-if [ "$d" != "hameln" ]; then
-PYTHONPATH=. python smolsam/train_one_gpu.py \
--d $DATA_PATH \
---data-info all \
---data-mode train_$d \
--t $d --disable-runid --lr 5e-4 --lr-scheduler exp -e 200 -r 16
-fi
+
+#PYTHONPATH=. python smolsam/train_one_gpu.py \
+#-d $DATA_PATH \
+#--data-info all \
+#--data-mode train_$d \
+#-t $d --disable-runid --lr 5e-4 --lr-scheduler exp -e 200 -r 16
+
 
 PYTHONPATH=. python smolsam/inference.py \
 -d $DATA_PATH \
--w $LOG_PATH/$d/medsam_model_best.pth \
--o $LOG_PATH/$d \
+-w $LOG_PATH/$TNAME/medsam_model_best.pth \
+-o $LOG_PATH/$TNAME \
 --data-info all \
---data-mode test_$d -r 16
+--data-mode test_$d -r 16 -s
 
 done

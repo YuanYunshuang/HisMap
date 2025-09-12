@@ -35,6 +35,7 @@ class Evaluator:
 
         return iou, prec, rec, acc
 
+
 def cal_all(pred_mask, gt_mask):
     intersection = np.logical_and(pred_mask, gt_mask).sum()
     union = np.logical_or(pred_mask, gt_mask).sum()

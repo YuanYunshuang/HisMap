@@ -65,8 +65,8 @@ def setup_parser():
     parser.add_argument("-t", "--task_name", type=str, default="default", help="task name")
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output_dir", type=str, default=f"{cur_path}/logs")
-    # train
     parser.add_argument("-r", "--dora-rank", type=int, default=4)
+    # train
     parser.add_argument("-e", "--num-epochs", type=int, default=160)
     parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
     parser.add_argument("-bs", "--batch-size", type=int, default=16)

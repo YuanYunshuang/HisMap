@@ -58,6 +58,7 @@ def setup_parser():
     cur_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("-w", "--checkpoint", type=str, default=f"/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/medsam_model_best.pth")
     parser.add_argument("-o","--output_dir", type=str)
+    parser.add_argument("-r", "--dora-rank", type=int, default=4)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     parser.add_argument("-bs", "--batch_size", type=int, default=32)
     parser.add_argument("-s", "--save-result", action="store_true", default=False)
@@ -159,7 +160,7 @@ def main():
     logging.basicConfig(filename=join(out_dir, "test.txt"), level=logging.INFO, filemode="a")
 
     sam_model = sam_model_registry[args.model_type](args.sam_ckpt)
-    dora_sam = DoRA_Sam(sam_model, 4)
+    dora_sam = DoRA_Sam(sam_model, args.dora_rank)
     mapsam = MapSAM(
         image_encoder=dora_sam.sam.image_encoder,
         mask_decoder=dora_sam.sam.mask_decoder,

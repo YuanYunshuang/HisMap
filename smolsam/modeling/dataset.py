@@ -13,7 +13,7 @@ except:
 
 
 class MapDataset(Dataset):
-    def __init__(self, data_root, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.01):
+    def __init__(self, data_root, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.1):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.

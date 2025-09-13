@@ -1,58 +1,40 @@
 #!/bin/bash
 
-LOG_PATH="/koko/train_out/HisMap/SMOL/gauss_siegfried"
-#LOG_PATH="/home/yuan/code/HisMap/smolsam/logs"
+#LOG_PATH="/koko/train_out/HisMap/SMOL/gauss_siegfried"
+LOG_PATH="/home/yuan/code/HisMap/smolsam/logs"
 DATA_PATH="/home/yuan/data/HisMap/SMOLdata"
-TNAME="gauss_siegfried_e200_r16"
+
+#ACCUM_STEP=4
+FG=0.1
+RANK=16
+EP=200
 
 
-#d="vineyard_fewshot10"
-#
-#for x in "30000" "40000"; do
-#  # TRAIN
-#  PYTHONPATH=. python smolsam/train_one_gpu.py \
-#  --resume $LOG_PATH/siegfried_railway/medsam_model_latest.pth \
-#  -d $DATA_PATH\
-#  --data-info siegfried_train \
-#  --data-mode train_siegfried_$d \
-#  -t siegfried_railway_$d"_itr"$x --disable-runid --lr 5e-3 --lr-scheduler exp -e 10 -itr $x
-#  # TEST
-#  PYTHONPATH=. python smolsam/inference.py \
-#  -w $LOG_PATH/siegfried_railway_$d"_itr"$x/medsam_model_best.pth \
-#  -o $LOG_PATH/siegfried_railway_$d"_itr"$x \
-#  --data-info siegfried_test \
-#  --data-mode test_siegfried_vineyard
-#done
+for ACCUM_STEP in 4 1; do
+  TNAME=gauss_siegfried_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
+  echo FG: $FG
+  echo RANK: $RANK
+  echo EP: $EP
+  echo ACCUM_STEP: $ACCUM_STEP
+  echo TNAME: $TNAME
 
-#PYTHONPATH=. python smolsam/inference.py \
-#-d $DATA_PATH \
-#-w $LOG_PATH/gauss_siegfried/medsam_model_best.pth \
-#-o $LOG_PATH/gauss_siegfried \
-#--data-info all \
-#--data-mode test_siegfried_railway
-#
-#PYTHONPATH=. python smolsam/inference.py \
-#-d $DATA_PATH \
-#-w $LOG_PATH/gauss_siegfried/medsam_model_best.pth \
-#-o $LOG_PATH/gauss_siegfried \
-#--data-info all \
-#--data-mode test_siegfried_vineyard
 
-for d in "hameln" "bayern" "siegfried_railway" "siegfrid_vineyard"; do
 # TRAIN
+PYTHONPATH=. python smolsam/train_one_gpu.py \
+-d $DATA_PATH \
+--data-info all \
+--data-mode train_all \
+-t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG
 
-#PYTHONPATH=. python smolsam/train_one_gpu.py \
-#-d $DATA_PATH \
-#--data-info all \
-#--data-mode train_$d \
-#-t $d --disable-runid --lr 5e-4 --lr-scheduler exp -e 200 -r 16
-
-
+# TEST
+for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
 PYTHONPATH=. python smolsam/inference.py \
 -d $DATA_PATH \
 -w $LOG_PATH/$TNAME/medsam_model_best.pth \
 -o $LOG_PATH/$TNAME \
 --data-info all \
---data-mode test_$d -r 16 -s
+--data-mode test_$d -r $RANK -fg $FG -s
+
+done
 
 done

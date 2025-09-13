@@ -65,8 +65,10 @@ def setup_parser():
     parser.add_argument("--sam-ckpt", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
+    # dataset
     parser.add_argument("--data-mode", type=str, default='test')
     parser.add_argument("--data-info", type=str, default='dinfo')
+    parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     args = parser.parse_args()
 
     return args
@@ -111,7 +113,11 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
         from smolsam.utils.vis import vis_train
     losses = []
     evals = []
-    test_dataset = MapDataset(args.root_dir, mode=args.data_mode, info_file=args.data_info, fix_src_lbl=label)
+    test_dataset = MapDataset(args.root_dir,
+                              mode=args.data_mode,
+                              info_file=args.data_info,
+                              fix_src_lbl=label,
+                              fg_ratio=args.foreground_ratio)
     num_samples = len(test_dataset)
 
     logger.info(f"# testing samples: {num_samples}")

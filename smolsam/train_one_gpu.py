@@ -62,10 +62,15 @@ def setup_parser():
     )
 
     cur_path = os.path.abspath(os.path.dirname(__file__))
-    parser.add_argument("-t", "--task_name", type=str, default="default", help="task name")
+    parser.add_argument("-t", "--task-name", type=str, default="default", help="task name")
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
-    parser.add_argument("-o","--output_dir", type=str, default=f"{cur_path}/logs")
+    parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
     parser.add_argument("-r", "--dora-rank", type=int, default=4)
+    parser.add_argument("-a", "--accum-steps", type=int, default=1)
+    # dataset
+    parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
+    parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
+    parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=160)
     parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
@@ -84,8 +89,6 @@ def setup_parser():
     # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
     parser.add_argument("--lr-scheduler", type=str, default="cosine", help="learning rate scheduler: cosine, exp or none")
     parser.add_argument("--from-scratch", action="store_true", default=False)
-    parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
-    parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
     parser.add_argument("--disable-runid", action="store_true", default=False)
     parser.add_argument("--save-dora-only", type=bool, default=True)
     args = parser.parse_args()
@@ -155,7 +158,10 @@ def main():
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
     # dataset
-    train_dataset = MapDataset(args.root_dir, mode=args.data_mode, info_file=args.data_info)
+    train_dataset = MapDataset(args.root_dir,
+                               mode=args.data_mode,
+                               info_file=args.data_info,
+                               fg_ratio=args.foreground_ratio)
     logger.info(f"# training samples: {len(train_dataset)}")
     train_dataloader = DataLoader(
         train_dataset,
@@ -204,27 +210,29 @@ def main():
                 cur_lr = adjust_learning_rate_exp_decay(optimizer, base_lr=args.lr, itr=iter_num,
                                                         max_itr=max_iterations,
                                                         warmup_itrs=args.warmup_itrs)
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
             if args.use_amp:
                 ## AMP
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     mapsam_pred = mapsam(img_src, lbl_src, img_tgt)
                     loss = (seg_loss(mapsam_pred, lbl_tgt.unsqueeze(1)) +
-                            ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1)))
+                            ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1))) / args.accum_steps
                     # loss = ce_loss(mapsam_pred, lbl_tgt.float())
                 scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+                if iter_num % args.accum_steps == 0:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
             else:
                 mapsam_pred = mapsam(img_src, lbl_src, img_tgt)
                 loss = (seg_loss(mapsam_pred, lbl_tgt.unsqueeze(1)) +
-                        ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1)))
+                        ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1))) / args.accum_steps
                 # loss = ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(1))
                 loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+                if iter_num % args.accum_steps == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
 
             epoch_loss += loss.item()
             pbar.set_postfix({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})

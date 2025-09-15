@@ -180,7 +180,7 @@ def main():
     losses = []
     lrs = []
     best_loss = 1e10
-    start_epoch = 0
+    start_epoch = 1
 
     if args.resume is not None:
         if os.path.isfile(args.resume):
@@ -194,7 +194,7 @@ def main():
         scaler = torch.cuda.amp.GradScaler()
 
     logger.info(">>>>>>>>>>>>>>>>>>START TRAINING <<<<<<<<<<<<<<<<<<")
-    for epoch in range(start_epoch, num_epochs):
+    for epoch in range(start_epoch, num_epochs + 1):
         epoch_loss = 0
         if args.lr_scheduler == 'cosine':
             cur_lr = adjust_learning_rate_cosine(optimizer, base_lr=args.lr, epoch=epoch,
@@ -261,7 +261,7 @@ def main():
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
         }
-        torch.save(checkpoint, join(model_save_path, "medsam_model_latest.pth"))
+        torch.save(checkpoint, join(model_save_path, "mapsam_model_latest.pth"))
         ## save the best model
         if epoch_loss < best_loss:
             best_loss = epoch_loss
@@ -270,18 +270,19 @@ def main():
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }
-            torch.save(checkpoint, join(model_save_path, "medsam_model_best.pth"))
-        # ## save the intermediate model
-        # if (epoch + 1) % 20 == 0:
-        #     checkpoint = {
-        #         "model": mapsam.state_dict(),
-        #         "optimizer": optimizer.state_dict(),
-        #         "epoch": epoch,
-        #     }
-        #     torch.save(checkpoint, join(model_save_path, f"medsam_model_ep{epoch+1}.pth"))
+            torch.save(checkpoint, join(model_save_path, "mapsam_model_best.pth"))
+
+        ## save the intermediate model
+        if epoch % 50 == 0 and epoch >= 100:
+            checkpoint = {
+                "model": mapsam.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch,
+            }
+            torch.save(checkpoint, join(model_save_path, f"mapsam_model_ep{epoch}.pth"))
 
         # save loss
-        with open(join(model_save_path, "medsam_loss.txt"), "w") as f:
+        with open(join(model_save_path, "mapsam_loss.txt"), "w") as f:
             for x, y in zip(losses, lrs):
                 f.write(f'{y:.6f}, {x:.6f}\n')
         # %% plot loss

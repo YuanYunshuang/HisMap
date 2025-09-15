@@ -3,13 +3,12 @@
 LOG_PATH="/mars/projects20/HisMap/smolsam/logs"
 DATA_PATH="/koko/datasets/SMOL"
 
-#ACCUM_STEP=4
-FG=0.1
-RANK=8
-EP=200
 
-
-for ACCUM_STEP in 4 1; do
+train () {
+  ACCUM_STEP=$1
+  RANK=$2
+  EP=$3
+  FG=0.1
   TNAME=gauss_siegfried_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
   echo FG: $FG
   echo RANK: $RANK
@@ -18,22 +17,23 @@ for ACCUM_STEP in 4 1; do
   echo TNAME: $TNAME
 
 
-# TRAIN
-PYTHONPATH=. python smolsam/train_one_gpu.py \
--d $DATA_PATH \
---data-info all \
---data-mode train_all \
--t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG
+  # TRAIN
+  PYTHONPATH=. python smolsam/train_one_gpu.py \
+  -d $DATA_PATH \
+  --data-info all \
+  --data-mode train_all \
+  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG
 
-# TEST
-for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
-PYTHONPATH=. python smolsam/inference.py \
--d $DATA_PATH \
--w $LOG_PATH/$TNAME/medsam_model_best.pth \
--o $LOG_PATH/$TNAME \
---data-info all \
---data-mode test_$d -r $RANK -fg $FG -s
+  # TEST
+  for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
+  PYTHONPATH=. python smolsam/inference.py \
+  -d $DATA_PATH \
+  -w $LOG_PATH/$TNAME/mapsam_model_best.pth \
+  -o $LOG_PATH/$TNAME \
+  --data-info all \
+  --data-mode test_$d -r $RANK -fg $FG -s
+  done
 
-done
+}
 
-done
+train 4 16 100

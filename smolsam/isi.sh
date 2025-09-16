@@ -37,6 +37,5 @@ train () {
 
 }
 
-train 4 16 100
 train 4 32 200
 train 8 16 200

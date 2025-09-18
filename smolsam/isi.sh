@@ -24,7 +24,7 @@ train () {
   -d $DATA_PATH \
   --data-info all \
   --data-mode train_"$NSHOT"shot \
-  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG
+  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr 100000
 
   # TEST
   for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do

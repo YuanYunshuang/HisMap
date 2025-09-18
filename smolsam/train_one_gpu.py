@@ -72,7 +72,7 @@ def setup_parser():
     parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     # train
-    parser.add_argument("-e", "--num-epochs", type=int, default=160)
+    parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
     parser.add_argument("-bs", "--batch-size", type=int, default=16)
     parser.add_argument("-nw", "--num-workers", type=int, default=4)

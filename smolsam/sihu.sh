@@ -9,7 +9,7 @@ train () {
   RANK=$2
   EP=$3
   NSHOT=$4
-  FG=0.1
+  FG=0.05
   TNAME=gauss_siegfried_"$NSHOT"shot_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
   echo FG: $FG
   echo RANK: $RANK

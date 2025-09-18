@@ -91,7 +91,7 @@ def generate_fewshot_list_old_class(n_shot=10):
         if name not in samples:
             samples[name] = {}
         for l, r in v.items():
-            if r > 0.1 and int(l) > 0:
+            if r > 0.05 and int(l) > 0:
                 if l not in samples[name]:
                     samples[name][l] = [k]
                 else:
@@ -111,4 +111,6 @@ def generate_fewshot_list_old_class(n_shot=10):
         fh.write('\n'.join(selected))
 
 
+generate_fewshot_list_old_class(n_shot=10)
+generate_fewshot_list_old_class(n_shot=50)
 generate_fewshot_list_old_class(n_shot=100)

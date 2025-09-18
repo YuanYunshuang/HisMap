@@ -70,5 +70,45 @@ def generate_meta_info():
         fh.write("\n".join(train_split))
 
 
-generate_data()
-generate_meta_info()
+def generate_fewshot_list_old_class(n_shot=10):
+    data_path = "/home/yuan/data/HisMap/SMOLdata"
+    meta = json.load(open(f"{data_path}/dinfo_all.json"))
+    samples = {}
+    selected = []
+
+    # get siegfried samples
+    siegfried_railway = [x.strip() for x in open(f"{data_path}/train_siegfried_railway_fewshot10.txt", "r").readlines()]
+    siegfried_vineyard = [x.strip() for x in open(f"{data_path}/train_siegfried_vineyard_fewshot10.txt", "r").readlines()]
+
+    # get hameln and bayern samples
+    for k, v in meta.items():
+        if k in siegfried_railway or k in siegfried_vineyard:
+            continue
+        if 'siegfried' in k:
+            name = k.split('_')[0]
+        else:
+            name = k.rsplit('_', 2)[0]
+        if name not in samples:
+            samples[name] = {}
+        for l, r in v.items():
+            if r > 0.1 and int(l) > 0:
+                if l not in samples[name]:
+                    samples[name][l] = [k]
+                else:
+                    samples[name][l].append(k)
+
+    for k, v in samples.items():
+        for l, spls in v.items():
+            if 'siegfried' in k:
+                selected.extend([spls[x] for x in np.random.choice(len(spls), n_shot-10, replace=len(spls) < n_shot-10)])
+            else:
+                selected.extend([spls[x] for x in np.random.choice(len(spls), n_shot, replace=len(spls) < n_shot)])
+
+    selected.extend(siegfried_railway)
+    selected.extend(siegfried_vineyard)
+
+    with open(f"{data_path}/train_{n_shot}shot.txt", "w") as fh:
+        fh.write('\n'.join(selected))
+
+
+generate_fewshot_list_old_class(n_shot=100)

@@ -9,8 +9,9 @@ train () {
   ACCUM_STEP=$1
   RANK=$2
   EP=$3
+  NSHOT=$4
   FG=0.1
-  TNAME=gauss_siegfried_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
+  TNAME=gauss_siegfried_"$NSHOT"shot_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
   echo FG: $FG
   echo RANK: $RANK
   echo EP: $EP
@@ -22,7 +23,7 @@ train () {
   PYTHONPATH=. python smolsam/train_one_gpu.py \
   -d $DATA_PATH \
   --data-info all \
-  --data-mode train_all \
+  --data-mode train_"$NSHOT"shot \
   -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG
 
   # TEST
@@ -37,5 +38,5 @@ train () {
 
 }
 
-train 4 32 200
-train 8 16 200
+train 4 16 200 10
+train 4 16 200 50

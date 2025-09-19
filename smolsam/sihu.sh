@@ -18,18 +18,18 @@ train () {
   echo TNAME: $TNAME
 
 
-  # TRAIN
-  PYTHONPATH=. python smolsam/train_one_gpu.py \
-  -d $DATA_PATH \
-  --data-info all \
-  --data-mode train_"$NSHOT"shot \
-  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr 100000
+#  # TRAIN
+#  PYTHONPATH=. python smolsam/train_one_gpu.py \
+#  -d $DATA_PATH \
+#  --data-info all \
+#  --data-mode train_"$NSHOT"shot \
+#  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr 100000
 
   # TEST
   for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
   PYTHONPATH=. python smolsam/inference.py \
   -d $DATA_PATH \
-  -w $LOG_PATH/$TNAME/mapsam_model_best.pth \
+  -w $LOG_PATH/$TNAME/mapsam_model_ep150.pth \
   -o $LOG_PATH/$TNAME \
   --data-info all \
   --data-mode test_$d -r $RANK -fg $FG -s

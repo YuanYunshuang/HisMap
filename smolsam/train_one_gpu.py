@@ -24,6 +24,7 @@ import shutil
 import glob
 
 from smolsam.modeling.dataset import MapDataset
+from smolsam.modeling.validator import Validator
 from smolsam.modeling.mapsam import MapSAM
 from smolsam.modeling.dora import  DoRA_Sam
 from smolsam import sam_model_registry
@@ -71,6 +72,7 @@ def setup_parser():
     parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
     parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
+    parser.add_argument("-val", "--validation-data", type=str, default=None)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
@@ -171,15 +173,33 @@ def main():
         pin_memory=True,
     )
 
+    # validation dataset
+    validator = None
+    if args.validation_data is not None:
+        val_dataset = MapDataset(args.root_dir,
+                                 mode=args.validation_data,
+                                 info_file=args.data_info,
+                                 fg_ratio=args.foreground_ratio)
+        val_dataloader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+        )
+        validator = Validator(val_dataloader, device)
+
     # %% train
-    num_epochs = max(args.num_epochs, args.max_iterations // len(train_dataloader))
-    max_iterations = max(args.max_iterations, num_epochs * len(train_dataloader))
-    warmup_epochs = round(args.warmup_itrs / len(train_dataloader))
+    num_itr_per_epoch = len(train_dataloader)
+    num_epochs = max(args.num_epochs, args.max_iterations // num_itr_per_epoch)
+    max_iterations = max(args.max_iterations, num_epochs * num_itr_per_epoch)
+    warmup_epochs = round(args.warmup_itrs / num_itr_per_epoch)
     logger.info(f"# epochs: {num_epochs}")
     iter_num = 1
     losses = []
     lrs = []
     best_loss = 1e10
+    max_mean_iou = 0
     start_epoch = 1
 
     if args.resume is not None:
@@ -263,8 +283,21 @@ def main():
         }
         torch.save(checkpoint, join(model_save_path, "mapsam_model_latest.pth"))
         ## save the best model
-        if epoch_loss < best_loss:
+        save_best_flag = False
+        if validator is not None:
+            if epoch % (2000 // num_itr_per_epoch) == 0:
+                print("Validating...")
+                val_mean_iou, val_res, val_str = validator.validate(mapsam)
+                logger.info('\n' + val_str)
+                print(val_str)
+                if val_mean_iou > max_mean_iou:
+                    save_best_flag = True
+                    max_mean_iou = val_mean_iou
+        elif epoch_loss < best_loss:
+            save_best_flag = True
             best_loss = epoch_loss
+
+        if save_best_flag:
             checkpoint = {
                 "model": state_dict,
                 "optimizer": optimizer.state_dict(),

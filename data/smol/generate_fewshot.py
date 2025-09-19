@@ -109,15 +109,26 @@ def generate_hameln2_train_test_list():
 
 
 
-def generate_fewshot_list_old_class(n_shot=10):
+def generate_fewshot_list_old_class(n_shot=10, mode="train"):
     data_path = "/home/yuan/data/HisMap/SMOLdata"
     meta = json.load(open(f"{data_path}/dinfo_all.json"))
-    samples = {}
-    selected = []
-
     # get siegfried samples
     siegfried_railway = [x.strip() for x in open(f"{data_path}/train_siegfried_railway_fewshot10.txt", "r").readlines()]
     siegfried_vineyard = [x.strip() for x in open(f"{data_path}/train_siegfried_vineyard_fewshot10.txt", "r").readlines()]
+    samples = {}
+    selected = []
+
+    if mode == "val":
+        with open(f"{data_path}/{mode}_{n_shot}shot.txt", "r") as fh:
+            train_samples = [x.strip() for x in fh.readlines()]
+        for s in train_samples:
+            if s in meta:
+                print(s)
+                meta.pop(s)
+
+    else:
+        selected.extend(siegfried_railway)
+        selected.extend(siegfried_vineyard)
 
     # get hameln and bayern samples
     for k, v in meta.items():
@@ -139,7 +150,7 @@ def generate_fewshot_list_old_class(n_shot=10):
     for k, v in samples.items():
         n_sample = {k: 0 for k in v.keys()}
         for l, spls in v.items():
-            if 'siegfried' in k:
+            if 'siegfried' in k and mode == "train":
                 selected.extend([spls[x] for x in np.random.choice(len(spls), n_shot-10, replace=len(spls) < n_shot-10)])
             else:
                 n_choice = max(n_shot - n_sample[l], 0)
@@ -150,16 +161,15 @@ def generate_fewshot_list_old_class(n_shot=10):
                             n_sample[lbl] += 1
                 selected.extend(sample_for_l)
 
-    selected.extend(siegfried_railway)
-    selected.extend(siegfried_vineyard)
 
-    with open(f"{data_path}/train_{n_shot}shot.txt", "w") as fh:
+
+    with open(f"{data_path}/{mode}_{n_shot}shot.txt", "w") as fh:
         fh.write('\n'.join(selected))
 
 
 # generate_hameln2_data_new_class()
 # generate_hameln2_meta_info()
 # generate_hameln2_train_test_list()
-generate_fewshot_list_old_class(n_shot=10)
-generate_fewshot_list_old_class(n_shot=50)
-generate_fewshot_list_old_class(n_shot=100)
+generate_fewshot_list_old_class(10, 'val')
+generate_fewshot_list_old_class(50, 'val')
+generate_fewshot_list_old_class(100, 'val')

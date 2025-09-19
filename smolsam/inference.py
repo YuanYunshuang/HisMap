@@ -121,7 +121,7 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
     num_samples = len(test_dataset)
 
     logger.info(f"# testing samples: {num_samples}")
-    train_dataloader = DataLoader(
+    test_dataloader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         shuffle=True,
@@ -134,7 +134,7 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
     logger.info(f">>>>>>>>>>>>>>>>>>TESTING LABEL {label}<<<<<<<<<<<<<<<<<<")
     print(f">>>>>>>>>>>>>>>>>>TESTING LABEL {label}<<<<<<<<<<<<<<<<<<")
     with (torch.no_grad()):
-        pbar = tqdm(train_dataloader)
+        pbar = tqdm(test_dataloader)
         # pbar.set_postfix({'Progress': f'0/{num_samples}', 'Loss': f'{0:.6f}',
         #                   'IoU': f'{0:.3f}', 'Precision': f'{0:.3f}', 'Recall': f'{0:.3f}'})
         for step, data in enumerate(pbar):

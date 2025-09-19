@@ -10,12 +10,14 @@ train () {
   RANK=$2
   EP=$3
   NSHOT=$4
+  ITR=$5
   FG=0.05
-  TNAME=gauss_siegfried_"$NSHOT"shot_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"
+  TNAME=all_"$NSHOT"shot_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"_itr"$ITR"_val
   echo FG: $FG
   echo RANK: $RANK
   echo EP: $EP
   echo ACCUM_STEP: $ACCUM_STEP
+  echo ITR: ITR
   echo TNAME: $TNAME
 
 
@@ -24,7 +26,7 @@ train () {
   -d $DATA_PATH \
   --data-info all \
   --data-mode train_"$NSHOT"shot \
-  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr 100000
+  -t $TNAME --disable-runid --lr 1e-3 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr $ITR -val val_10shot
 
   # TEST
   for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
@@ -38,5 +40,4 @@ train () {
 
 }
 
-train 4 16 200 10
-train 4 16 200 50
+train 4 16 200 10 40000

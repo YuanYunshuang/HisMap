@@ -25,7 +25,7 @@ from smolsam import sam_model_registry
 from smolsam.tools.eval import Evaluator
 
 # set seeds
-torch.manual_seed(2023)
+torch.manual_seed(8023)
 torch.cuda.empty_cache()
 
 # torch.distributed.init_process_group(backend="gloo")
@@ -208,8 +208,12 @@ def main():
         labels = [2]
     elif 'bayern' in args.data_mode:
         labels = [1, 2, 4]
-    else:
+    elif 'hameln2' in args.data_mode:
+        labels = [1, 2, 3, 4, 5]
+    elif 'hameln' in args.data_mode:
         labels = [1, 2, 3, 4]
+    else:
+        raise ValueError(f"Unknown data_mode: {args.data_mode} for test.")
     for label in labels:
         single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 

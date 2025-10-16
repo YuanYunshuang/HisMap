@@ -8,11 +8,9 @@ DATA_PATH="/home/yuan/data/HisMap/SMOLdata"
 train () {
   ACCUM_STEP=$1
   RANK=$2
-  EP=$3
-  NSHOT=$4
-  ITR=$5
-  FG=0.05
-  TNAME=all_"$NSHOT"shot_e"$EP"_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"_itr"$ITR"_val
+  ITR=$3
+  FG=0.02
+  TNAME=fewshot_hameln2_r"$RANK"_a"$ACCUM_STEP"_fg"$FG"_itr"$ITR"
   echo FG: $FG
   echo RANK: $RANK
   echo EP: $EP
@@ -21,24 +19,23 @@ train () {
   echo TNAME: $TNAME
 
 
-  # TRAIN
-  PYTHONPATH=. python smolsam/train_one_gpu.py \
-  -d $DATA_PATH \
-  --data-info all \
-  --data-mode train_"$NSHOT"shot \
-  -t $TNAME --disable-runid --lr 1e-3 --lr-scheduler exp -e $EP -r $RANK -a $ACCUM_STEP -fg $FG -itr $ITR -val val_10shot
+#  # TRAIN
+#  PYTHONPATH=. python smolsam/train_one_gpu.py \
+#  -d $DATA_PATH \
+#  --data-info hameln2 \
+#  --data-mode train_hameln2 \
+#  --resume /home/yuan/code/HisMap/smolsam/logs/gauss_siegfried_e200_r16_a4_fg0.1/mapsam_model_best.pth \
+#  -t $TNAME --disable-runid --lr 5e-4 --lr-scheduler exp -r $RANK -a $ACCUM_STEP -fg $FG -itr $ITR -cj 0 -mli 5
 
-  # TEST
-  for d in "hameln" "bayern" "siegfried_railway" "siegfried_vineyard"; do
+
   PYTHONPATH=. python smolsam/inference.py \
   -d $DATA_PATH \
   -w $LOG_PATH/$TNAME/mapsam_model_best.pth \
   -o $LOG_PATH/$TNAME \
-  --data-info all \
-  --data-mode test_$d -r $RANK -fg $FG -s
-  done
+  --data-info hameln2 \
+  --data-mode test_hameln2 -r $RANK -fg 0.01 -s
+
 
 }
 
-train 4 16 200 10 100000
-train 4 16 200 50 100000
+train 4 16 50000

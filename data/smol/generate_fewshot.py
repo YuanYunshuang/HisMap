@@ -9,18 +9,20 @@ img_size = 384
 margin = 0
 path = "/home/yuan/data/HisMap/SMOLdata/fewshot/manual"
 outdir = "/home/yuan/data/HisMap/SMOLdata/hameln2"
+data_path = "/home/yuan/data/HisMap/SMOLdata"
 sheets = os.listdir(path)
 
 def generate_hameln2_data_new_class():
+    label_map = {'building': 1, 'industrial': 2, 'sport': 3, 'road1': 4, 'road2': 5}
     for sheet in sheets:
-        lbl_cnt = 0
         MAP = cv2.imread(f"{path}/{sheet}/{sheet}.png", cv2.IMREAD_UNCHANGED)
         label_files = [x for x in os.listdir(f"{path}/{sheet}") if x!=f"{sheet}.png"]
         LABEL = np.zeros(MAP.shape[:2], dtype=np.uint8)
         for lf in label_files:
-            lbl_cnt += 1
+            label_name = lf.split('.png')[0].split('_')[-1]
+            label_idx = label_map[label_name]
             L = cv2.imread(f"{path}/{sheet}/{lf}", cv2.IMREAD_UNCHANGED)
-            LABEL[L == 255] = lbl_cnt
+            LABEL[L == 255] = label_idx
 
         H, W = min(MAP.shape[0], LABEL.shape[0]), min(MAP.shape[1], LABEL.shape[1])
         x = np.arange(0, W, img_size-margin)
@@ -56,7 +58,7 @@ def generate_hameln2_meta_info():
         name = f"hameln2.{f.split('.')[0]}"
         lbl = cv2.imread(os.path.join(lbl_path, f), cv2.IMREAD_UNCHANGED)
         stat = {}
-        for i in range(5):
+        for i in range(6):
             stat[i] = int(np.sum(lbl == i)) / lbl.size
         stats[name] = stat
 
@@ -71,7 +73,6 @@ def generate_hameln2_meta_info():
 
 
 def generate_hameln2_train_test_list():
-    data_path = "/home/yuan/data/HisMap/SMOLdata"
     meta = json.load(open(f"{data_path}/dinfo_hameln2.json"))
     samples = {}
     train_split = []
@@ -108,9 +109,7 @@ def generate_hameln2_train_test_list():
         fh.write("\n".join(test_split))
 
 
-
 def generate_fewshot_list_old_class(n_shot=10, mode="train"):
-    data_path = "/home/yuan/data/HisMap/SMOLdata"
     meta = json.load(open(f"{data_path}/dinfo_all.json"))
     # get siegfried samples
     siegfried_railway = [x.strip() for x in open(f"{data_path}/train_siegfried_railway_fewshot10.txt", "r").readlines()]
@@ -166,10 +165,28 @@ def generate_fewshot_list_old_class(n_shot=10, mode="train"):
     with open(f"{data_path}/{mode}_{n_shot}shot.txt", "w") as fh:
         fh.write('\n'.join(selected))
 
+def count_training_samples():
+    data_path = "/home/yuan/data/HisMap/SMOLdata"
+    all = len(open(f"{data_path}/train_all.txt", "r").readlines())
+    shot10 = len(set(open(f"{data_path}/train_10shot.txt", "r").readlines()))
+    shot50 = len(set(open(f"{data_path}/train_50shot.txt", "r").readlines()))
+    shot100 = len(set(open(f"{data_path}/train_100shot.txt", "r").readlines()))
+    print(f"Ratio of training samples 10 shot: {shot10/ all * 100:.2f}%")
+    print(f"Ratio of training samples 50 shot: {shot50/ all * 100:.2f}%")
+    print(f"Ratio of training samples 100 shot: {shot100/ all * 100:.2f}%")
 
+def count_fewshot_samples():
+    label_file = os.path.join(data_path, "fewshot/manual/3821_2002_crop/3821_2002_crop_road2.png")
+    label = cv2.imread(label_file, cv2.IMREAD_GRAYSCALE)
+    ratio = np.sum(label > 0) / np.sum(label >= 0)
+    print(f"Number of fewshot samples: {np.sum(label > 0)}")
+    print(f"Ratio of fewshot samples: {ratio * 100:.2f}%")
 # generate_hameln2_data_new_class()
 # generate_hameln2_meta_info()
 # generate_hameln2_train_test_list()
-generate_fewshot_list_old_class(10, 'val')
-generate_fewshot_list_old_class(50, 'val')
-generate_fewshot_list_old_class(100, 'val')
+# generate_fewshot_list_old_class(10, 'val')
+# generate_fewshot_list_old_class(50, 'val')
+# generate_fewshot_list_old_class(100, 'val')
+# count_training_samples()
+
+count_fewshot_samples()

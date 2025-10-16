@@ -73,6 +73,8 @@ def setup_parser():
     parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
+    parser.add_argument("-cj", "--color-jitter", type=float, default=0.05)
+    parser.add_argument("-mli", "--max-label-idx", type=int, default=4)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
@@ -163,7 +165,9 @@ def main():
     train_dataset = MapDataset(args.root_dir,
                                mode=args.data_mode,
                                info_file=args.data_info,
-                               fg_ratio=args.foreground_ratio)
+                               fg_ratio=args.foreground_ratio,
+                               color_jitter=args.color_jitter,
+                               max_label_idx=args.max_label_idx)
     logger.info(f"# training samples: {len(train_dataset)}")
     train_dataloader = DataLoader(
         train_dataset,
@@ -206,7 +210,7 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            mapsam.load_state_dict(checkpoint["model"])
+            mapsam.load_dora_parameters(checkpoint["model"])
             if not "fewshot" in args.data_mode:
                 optimizer.load_state_dict(checkpoint["optimizer"])
                 start_epoch = checkpoint["epoch"] + 1

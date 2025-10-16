@@ -1,3 +1,4 @@
+import copy
 import os
 
 import cv2
@@ -13,7 +14,7 @@ except:
 
 
 class MapDataset(Dataset):
-    def __init__(self, data_root, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.1):
+    def __init__(self, data_root, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.1, color_jitter=0.05, max_label_idx=4):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -50,6 +51,7 @@ class MapDataset(Dataset):
         self.mode = mode
         self.fix_src_lbl = fix_src_lbl
         self.fg_ratio = fg_ratio
+        self.max_label_idx = max_label_idx
 
         if info_file is None:
             info_file = "dinfo_fewshot.json" if mode == "fewshot" else "dinfo.json"
@@ -59,10 +61,16 @@ class MapDataset(Dataset):
             self.stats = json.load(f)
         with open(os.path.join(self.data_root, f"{mode}.txt")) as f:
             self.file_list = [x.strip() for x in f.readlines()]
-            self.stats = {k: v for k, v in self.stats.items() if k in self.file_list}
+            if "train" in self.mode:
+                self.stats = {k: v for k, v in self.stats.items() if k in self.file_list}
+                self.src_list = self.file_list
+            elif "test" in self.mode:
+                self.src_list = [k for k in self.stats.keys() if k not in self.file_list]
+            else:
+                raise ValueError("Invalid mode")
 
-        self.transform = MapTransformTrain() if 'train' in mode else MapTransformTest()
-        print(f"number of images: {len(self.file_list)}")
+        self.transform = MapTransformTrain(color_jitter=color_jitter) if 'train' in mode else MapTransformTest()
+        print(f"Number of {mode} images: {len(self.file_list)}")
         self.get_loading_list()
 
     def get_loading_list(self):
@@ -73,7 +81,7 @@ class MapDataset(Dataset):
                 if self.fix_src_lbl > 0:
                     loading_list_src[key] = {self.fix_src_lbl: []}
                 else:
-                    loading_list_src[key] = {i: [] for i in range(1, 5)}
+                    loading_list_src[key] = {i: [] for i in range(1, self.max_label_idx + 1)}
             for k, v in info.items():
                 if int(k) == 0:
                     continue
@@ -96,7 +104,7 @@ class MapDataset(Dataset):
             print(f"{len(self.file_list)} images out of {total_file_num} are selected for evaluation of the fixed src label {self.fix_src_lbl}.")
         self.loading_list = loading_list_src
 
-        while len(self.file_list) < 160:
+        while "train" in self.mode and len(self.file_list) < 160:
             self.file_list.extend(self.file_list)
 
     def select_tgt_cls(self, tgt_info, tgt_map_key):
@@ -108,7 +116,7 @@ class MapDataset(Dataset):
             selected_cls = np.random.choice(tgt_cls)
         else:
             # p probability to select a cls that is present in src image but not present in tgt image
-            not_tgt_cls = [x for x in range(1, 5) if x not in tgt_cls and len(self.loading_list[tgt_map_key][x]) > 0]
+            not_tgt_cls = [x for x in range(1, self.max_label_idx + 1) if x not in tgt_cls and len(self.loading_list[tgt_map_key][x]) > 0]
             if len(not_tgt_cls) == 0:
                 not_tgt_cls = [int(k) for k, v in self.loading_list[tgt_map_key].items() if len(v) > 0]
             selected_cls = np.random.choice(not_tgt_cls)
@@ -128,7 +136,9 @@ class MapDataset(Dataset):
         else:
             selected_cls = self.select_tgt_cls(tgt_info, tgt_map_key)
 
-        src_img_name = np.random.choice(self.loading_list[tgt_map_key][selected_cls])
+        src_imgs = self.loading_list[tgt_map_key][selected_cls]
+        src_imgs = [x for x in src_imgs if x in self.src_list and tgt_image_name != x]
+        src_img_name = np.random.choice(src_imgs)
         _, src_name = src_img_name.split(".")
 
         src_img = cv2.imread(os.path.join(self.data_root, loc, 'imgs', src_name + '.png'), cv2.IMREAD_UNCHANGED)

@@ -46,8 +46,9 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
 
 
 def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
+    assert img_src.dim() == 5 and img_src.shape[1] == 1, "Only support one src image visualization."
     lbl_src = F.interpolate(
-            lbl_src.unsqueeze(1).float(),
+            lbl_src.float(),
             img_src.shape[-2:],
             mode="bilinear",
             align_corners=False,
@@ -57,11 +58,11 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
 
     fig, axs = plt.subplots(nrows=bs, ncols=5, figsize=(10, bs*2))
 
-    img_src = img_src.detach().permute(0, 2, 3, 1).cpu().numpy()
+    img_src = img_src.squeeze(1).detach().permute(0, 2, 3, 1).cpu().numpy()
     img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy()
     lbl_src = lbl_src.detach().cpu().numpy()
     lbl_tgt = lbl_tgt.detach().cpu().numpy()
-    pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
+    pred_tgt = pred_tgt.squeeze(1).detach().sigmoid().squeeze().cpu().numpy()
 
     for i in range(bs):
         axs[i, 0].imshow(img_src[i][..., ::-1])

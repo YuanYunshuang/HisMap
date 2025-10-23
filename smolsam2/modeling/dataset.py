@@ -7,6 +7,7 @@ import numpy as np
 import json
 from torch.utils.data import Dataset
 from torchvision.transforms.v2 import functional as F
+from torchvision.transforms import InterpolationMode
 try:
     from torchvision.transforms import v2
 except:
@@ -373,16 +374,13 @@ class PadToTargetSize:
 
 class MapTransformTrain:
     def __init__(self, image_size=384, rot_degrees=30, color_jitter=0.01):
-        self.geometric_transforms = v2.Compose([
-            v2.RandomHorizontalFlip(p=0.5),
-            v2.RandomVerticalFlip(p=0.5),
-            v2.RandomRotation(degrees=(-rot_degrees, rot_degrees)),
-        ])
+        # store params for reproducible geometry sampling per pair
+        self.rot_degrees = rot_degrees
 
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            # v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
@@ -394,6 +392,54 @@ class MapTransformTrain:
         self.pad_transforms = v2.Compose([
             PadToTargetSize(image_size),
         ])
+
+    def geometric_transforms(self, img, lbl):
+        """
+        Sample a single geometric transform (hflip, vflip, rotation angle)
+        and apply the same transform to all images and labels. Supports
+        either a single image/label or lists of them.
+        Images use bilinear interpolation and labels use nearest.
+        """
+        # sample once per call so all items get identical transform
+        do_h = np.random.rand() < 0.5
+        do_v = np.random.rand() < 0.5
+        angle = float(np.random.uniform(-self.rot_degrees, self.rot_degrees))
+
+        def apply_one(i, l):
+            # horizontal flip
+            if do_h:
+                i = F.hflip(i)
+                if l is not None:
+                    l = F.hflip(l)
+            # vertical flip
+            if do_v:
+                i = F.vflip(i)
+                if l is not None:
+                    l = F.vflip(l)
+
+            # rotation: images bilinear, labels nearest
+            i = F.rotate(i, angle=angle, interpolation=InterpolationMode.BILINEAR, expand=False, fill=0)
+            if l is not None:
+                # use nearest to preserve mask values; ensure bool dtype after
+                l = F.rotate(l.unsqueeze(0), angle=angle, interpolation=InterpolationMode.NEAREST, 
+                             expand=False, fill=False).squeeze(0)
+                try:
+                    l = l.to(torch.bool)
+                except Exception:
+                    # fallback if returned type isn't a tensor
+                    pass
+            return i, l
+
+        if isinstance(img, list):
+            imgs = []
+            lbls = []
+            for i, ll in zip(img, lbl):
+                ii, ll = apply_one(i, ll)
+                imgs.append(ii)
+                lbls.append(ll)
+            return imgs, lbls
+        else:
+            return apply_one(img, lbl)
 
     def __call__(self, img, lbl):
         img = self.img_transforms(img)

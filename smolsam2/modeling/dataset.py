@@ -421,7 +421,8 @@ class MapTransformTrain:
             i = F.rotate(i, angle=angle, interpolation=InterpolationMode.BILINEAR, expand=False, fill=0)
             if l is not None:
                 # use nearest to preserve mask values; ensure bool dtype after
-                l = F.rotate(l, angle=angle, interpolation=InterpolationMode.NEAREST, expand=False, fill=False)
+                l = F.rotate(l.unsqueeze(0), angle=angle, interpolation=InterpolationMode.NEAREST, 
+                             expand=False, fill=False).squeeze(0)
                 try:
                     l = l.to(torch.bool)
                 except Exception:

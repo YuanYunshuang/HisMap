@@ -23,13 +23,15 @@ from datetime import datetime
 import shutil
 import glob
 
-from smolsam.modeling.dataset import MapDataset
+from smolsam.modeling.dataset import get_dataset
 from smolsam.modeling.validator import Validator
 from smolsam.modeling.mapsam import MapSAM
 from smolsam.modeling.dora import  DoRA_Sam
 from smolsam import sam_model_registry
 from smolsam.utils.vis import vis_train
 from smolsam.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
+from smolsam.utils.debug_utils import update_repr_for_np_and_torch
+update_repr_for_np_and_torch()
 
 # set seeds
 torch.manual_seed(2023)
@@ -42,6 +44,7 @@ os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
 os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
 os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
 os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
+
 
 
 
@@ -69,8 +72,9 @@ def setup_parser():
     parser.add_argument("-r", "--dora-rank", type=int, default=4)
     parser.add_argument("-a", "--accum-steps", type=int, default=1)
     # dataset
-    parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
-    parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
+    parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
+    parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
+    parser.add_argument("--data-info", type=str, help="data info file (.json)")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     parser.add_argument("-cj", "--color-jitter", type=float, default=0.05)
@@ -162,7 +166,8 @@ def main():
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
     # dataset
-    train_dataset = MapDataset(args.root_dir,
+    train_dataset = get_dataset(args.dataset_name,
+                               data_root=args.root_dir,
                                mode=args.data_mode,
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio,

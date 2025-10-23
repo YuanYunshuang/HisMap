@@ -20,13 +20,13 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
         inf_dir = os.path.join(out_dir, f'inf_plots')
         os.makedirs(inf_dir, exist_ok=True)
         lbl_src = F.interpolate(
-            lbl_src.unsqueeze(1).float(),
+            lbl_src.float(),
             img_src.shape[-2:],
             mode="bilinear",
             align_corners=False,
         ).squeeze(1)
 
-        img_src = img_src.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+        img_src = img_src.detach().squeeze(1).permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
         img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
         lbl_src = lbl_src.detach().cpu().numpy()
         lbl_tgt = lbl_tgt.detach().cpu().numpy()

@@ -48,26 +48,30 @@ class MapSAM(nn.Module):
         self.load_state_dict(full_state_dict)
 
     def forward(self, img_src, lbl_src, img_tgt):
-        image = torch.cat([img_src, img_tgt], dim=0)
-        image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)
-        src_img_embedding = image_embedding[:img_src.shape[0]]
-        tgt_img_embedding = image_embedding[img_src.shape[0]:]
+        image = torch.cat([img_tgt.unsqueeze(1), img_src], dim=1) # (B, T, 3, H, W)
+        B, T, C, H, W = image.shape
+        image_embedding = self.image_encoder(image.flatten(0, 1))  # (B*T, 256, 64, 64)
+        image_embedding = image_embedding.view(B, T, *image_embedding.shape[1:])  # (B, T, 256, 64, 64)
+        tgt_img_embedding = image_embedding[:, :1].repeat(1, T-1, 1, 1, 1) # (B, T-1, 256, 64, 64)
+        src_img_embedding = image_embedding[:, 1:] # (B, T-1, 256, 64, 64)
         # do not compute gradients for prompt encoder
-        with torch.no_grad():
-            sparse_embeddings, dense_embeddings = self.prompt_encoder(
-                imgs_emb=src_img_embedding,
-                masks=lbl_src.unsqueeze(1).float(),
-            )
+        # with torch.no_grad():
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            imgs_emb=src_img_embedding.flatten(0, 1),  # (B*(T-1), 256, 64, 64)
+            masks=lbl_src.flatten(0, 1).unsqueeze(1).float(), # (B*(T-1), 1, H, W
+        )
         low_res_masks, _ = self.mask_decoder(
-            image_embeddings=tgt_img_embedding,  # (B, 256, 24, 24)
+            image_embeddings=tgt_img_embedding.flatten(0, 1),  # (B, T-1, 256, 64, 64) -> (B*(T-1), 256, 64, 64)
             image_pe=self.prompt_encoder.get_dense_pe(),  # (1, 256, 24, 24)
-            sparse_prompt_embeddings=sparse_embeddings,  # (B, 0, 256)
-            dense_prompt_embeddings=dense_embeddings,  # (B, 256, 24, 24)
+            sparse_prompt_embeddings=sparse_embeddings.repeat(T-1, 1, 1),  # (B*(T-1), N_sparse, 256)
+            dense_prompt_embeddings=dense_embeddings,  # (B*(T-1), 256, 64, 64)
             multimask_output=False,
         )
+        low_res_masks = low_res_masks.view(B, T-1, *low_res_masks.shape[1:])  # (B, T-1, 1, 96, 96)
+        low_res_masks = low_res_masks.max(dim=1).values  # (B, 1, 96, 96)
         ori_res_masks = F.interpolate(
             low_res_masks,
-            size=(image.shape[2], image.shape[3]),
+            size=(H, W),
             mode="bilinear",
             align_corners=False,
         )

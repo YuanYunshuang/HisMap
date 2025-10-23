@@ -54,7 +54,7 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
             align_corners=False,
         ).squeeze(1)
 
-    bs = img_src.shape[0]
+    bs = min(img_src.shape[0], 8)
 
     fig, axs = plt.subplots(nrows=bs, ncols=5, figsize=(10, bs*2))
 

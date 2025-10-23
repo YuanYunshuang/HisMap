@@ -78,13 +78,13 @@ class MapDataset(Dataset):
     def get_loading_list(self):
         loading_list_src = {}
         for name, info in self.stats.items():
-            key = name.rsplit("_", 2)[0]
+            key = name.rsplit("_", 2)[0] # map sheet key
             if key not in loading_list_src:
                 if self.fix_src_lbl > 0:
                     loading_list_src[key] = {self.fix_src_lbl: []}
                 else:
                     loading_list_src[key] = {i: [] for i in range(1, 5)}
-            for k, v in info.items():
+            for k, v in info.items(): # k: class label, v: ratio
                 if int(k) == 0:
                     continue
                 if 0 < self.fix_src_lbl != int(k):
@@ -287,8 +287,14 @@ class SynTraDataset(Dataset):
             img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
             img = np.array(img)
             lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
+            # get selected color idx
+            palette = lbl.getpalette()
+            palette = np.array(palette).reshape(-1, 3)
+            selected_color_idx = np.where((palette == selected_color).all(axis=1))[0]
+            if len(selected_color_idx) == 0:
+                raise ValueError(f"Selected color {selected_color} not found in palette.")
             lbl = np.array(lbl)
-            lbl = np.all(lbl == selected_color, axis=-1)
+            lbl = lbl == selected_color_idx
             imgs.append(img)
             lbls.append(lbl)
 
@@ -394,13 +400,11 @@ class MapTransformTrain:
         lbl = self.lbl_transforms(lbl)
         img, lbl = self.pad_transforms(img, lbl)
         img, lbl = self.geometric_transforms(img, lbl)
-<<<<<<< HEAD
+
         if isinstance(lbl, list):
             lbl = [l.squeeze() for l in lbl]
         else:
             lbl = lbl.squeeze()
-=======
->>>>>>> 25ad46644aec5bfa6069d9e762752cf1f4c17a68
         return img, lbl
 
 

@@ -4,11 +4,13 @@
         {
             "type": "debugpy",
             "request": "launch",
-            "name": "Launch Training Script",
+            "name": "Training",
             "program": "${workspaceFolder}/smolsam2/train_one_gpu.py",
             "args": [
-                "-e",
-                "800",
+                "-d",
+                "/koko/datasets/SMOL_syntra",
+                "--data-info",
+                "pairing_train_100shot_train_100shot_intercls.json"
             ],
             "console": "integratedTerminal",
             "justMyCode": false,
@@ -20,7 +22,7 @@
         {
             "type": "debugpy",
             "request": "launch",
-            "name": "Launch Testing Script",
+            "name": "Testing",
             "program": "${workspaceFolder}/smolsam2/inference.py",
             // "args": [
             //     "--config",

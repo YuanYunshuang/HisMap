@@ -76,12 +76,12 @@ def setup_parser():
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
-    parser.add_argument("-itr", "--max-iterations", type=int, default=10000)
+    parser.add_argument("-itr", "--max-iterations", type=int, default=100000)
     parser.add_argument("-bs", "--batch-size", type=int, default=16)
     parser.add_argument("-nw", "--num-workers", type=int, default=4)
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
-    parser.add_argument("--lr", type=float, default=5e-5, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("--lr", type=float, default=1e-3, metavar="LR", help="learning rate (absolute lr)")
     parser.add_argument("--warmup-itrs", type=int, default=1000, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("--use-wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("--use-amp", action="store_true", default=False, help="use amp")
@@ -90,7 +90,7 @@ def setup_parser():
     parser.add_argument("--plot-loss", action="store_true", default=False)
     parser.add_argument("--debug", action="store_true", default=False)
     # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
-    parser.add_argument("--lr-scheduler", type=str, default="cosine", help="learning rate scheduler: cosine, exp or none")
+    parser.add_argument("--lr-scheduler", type=str, default="exp", help="learning rate scheduler: cosine, exp or none")
     parser.add_argument("--from-scratch", action="store_true", default=False)
     parser.add_argument("--disable-runid", action="store_true", default=False)
     parser.add_argument("--save-dora-only", type=bool, default=True)

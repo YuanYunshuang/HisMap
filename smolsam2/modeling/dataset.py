@@ -362,7 +362,11 @@ class MapTransformTrain:
         lbl = self.lbl_transforms(lbl)
         img, lbl = self.pad_transforms(img, lbl)
         img, lbl = self.geometric_transforms(img, lbl)
-        return img, lbl.squeeze()
+        if isinstance(lbl, list):
+            lbl = [l.squeeze() for l in lbl]
+        else:
+            lbl = lbl.squeeze()
+        return img, lbl
 
 
 class MapTransformTest:

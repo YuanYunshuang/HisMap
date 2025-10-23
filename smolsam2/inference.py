@@ -18,11 +18,12 @@ import monai
 import argparse
 
 
-from smolsam.modeling.dataset import MapDataset
-from smolsam.modeling.mapsam import MapSAM
-from smolsam.modeling.dora import  DoRA_Sam
-from smolsam import sam_model_registry
-from smolsam.tools.eval import Evaluator
+from smolsam2.modeling.dataset import get_dataset
+from smolsam2.modeling.mapsam import MapSAM
+from smolsam2.modeling.dora import  DoRA_Sam
+from smolsam2 import sam_model_registry
+from smolsam2.tools.eval import Evaluator
+from smolsam2.utils.debug_utils import *
 
 # set seeds
 torch.manual_seed(2023)
@@ -44,7 +45,7 @@ def setup_parser():
         "-d",
         "--root-dir",
         type=str,
-        default="/home/yuan/data/HisMap/SMOLdata",
+        default="/home/yuan/data/HisMap/syntra384",
         help="path to training dataset; two subfolders: lbls and imgs",
     )
     parser.add_argument(
@@ -56,18 +57,19 @@ def setup_parser():
     )
 
     cur_path = os.path.abspath(os.path.dirname(__file__))
-    parser.add_argument("-w", "--checkpoint", type=str, default=f"/home/yuan/code/HisMap/smolsam/logs/cosine_lr5e-5/medsam_model_best.pth")
+    parser.add_argument("-w", "--checkpoint", type=str, default=f"/home/yuan/code/HisMap/smolsam2/logs/default-20251017-1453/mapsam_model_latest.pth")
     parser.add_argument("-o","--output_dir", type=str)
-    parser.add_argument("-r", "--dora-rank", type=int, default=4)
+    parser.add_argument("-r", "--dora-rank", type=int, default=16)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     parser.add_argument("-bs", "--batch_size", type=int, default=32)
-    parser.add_argument("-s", "--save-result", action="store_true", default=False)
+    parser.add_argument("-s", "--save-result", action="store_true", default=True)
     parser.add_argument("--sam-ckpt", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
     # dataset
     parser.add_argument("--data-mode", type=str, default='test')
-    parser.add_argument("--data-info", type=str, default='dinfo')
+    parser.add_argument("--dataset-name", type=str, default='syntra')
+    parser.add_argument("--data-info", type=str)
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     args = parser.parse_args()
 
@@ -113,11 +115,12 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
         from smolsam.utils.vis import vis_train
     losses = []
     evals = []
-    test_dataset = MapDataset(args.root_dir,
-                              mode=args.data_mode,
-                              info_file=args.data_info,
-                              fix_src_lbl=label,
-                              fg_ratio=args.foreground_ratio)
+    test_dataset = get_dataset(args.dataset_name,
+                                 data_root=args.root_dir,
+                                 mode=args.data_mode,
+                                 info_file=args.data_info,
+                                 fg_ratio=args.foreground_ratio,
+                                 fix_src_lbl=label,)
     num_samples = len(test_dataset)
 
     logger.info(f"# testing samples: {num_samples}")
@@ -127,6 +130,7 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
+        collate_fn=test_dataset.collate_fn,
     )
 
     evaluator = Evaluator()
@@ -152,7 +156,8 @@ def single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
             if args.save_result:
-                save_results(os.path.join(out_dir, f"{args.data_mode}_{str(label)}"), img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, meta['tgt_name'])
+                save_results(os.path.join(out_dir, f"{args.data_mode}_{str(label)}"), 
+                             img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, [x['tgt_name'] for x in meta])
             if args.debug and (step + 1) % 50 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
             losses.append(loss.item())
@@ -199,7 +204,7 @@ def main():
     assert os.path.isfile(args.checkpoint)
     ## Map model to be loaded to specified single GPU
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    mapsam.load_dora_parameters(checkpoint["model"])
+    mapsam.load_dora_parameters(checkpoint["dora-model"])
 
     # %% test
     if 'siegfried_railway' in args.data_mode:
@@ -208,8 +213,10 @@ def main():
         labels = [2]
     elif 'bayern' in args.data_mode:
         labels = [1, 2, 4]
-    else:
+    elif "hameln" in args.data_mode:
         labels = [1, 2, 3, 4]
+    else:
+        labels = [0]
     for label in labels:
         single_test(label, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
 

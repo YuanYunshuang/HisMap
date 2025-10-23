@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Launch Training Script",
+            "program": "${workspaceFolder}/smolsam2/train_one_gpu.py",
+            "args": [
+                "-e",
+                "800",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "QT_QPA_PLATFORM": "offscreen"
+            }
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Launch Testing Script",
+            "program": "${workspaceFolder}/smolsam2/inference.py",
+            // "args": [
+            //     "--config",
+            //     "configs/syntra_ce_loss.yaml"
+            // ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "QT_QPA_PLATFORM": "offscreen"
+            }
+        }
+    ]
+  }

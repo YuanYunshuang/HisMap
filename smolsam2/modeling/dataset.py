@@ -1,6 +1,7 @@
 import os
 
 import cv2
+from PIL import Image
 import torch
 import numpy as np
 import json
@@ -10,6 +11,15 @@ try:
     from torchvision.transforms import v2
 except:
     pass
+
+
+def get_dataset(dataset_name, **kwargs):
+    if dataset_name == "smol":
+        return MapDataset(**kwargs)
+    elif dataset_name == "syntra":
+        return SynTraDataset(**kwargs)
+    else:
+        raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
 
 
 class MapDataset(Dataset):
@@ -167,7 +177,7 @@ class MapDataset(Dataset):
 
 
 class SynTraDataset(Dataset):
-    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.1):
+    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.05):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -213,28 +223,43 @@ class SynTraDataset(Dataset):
         print(f"Number of {mode} images: {len(self.file_list)}")
 
     def select_tgt_cls(self, tgt_full_name, src_full_names):
-
+        if self.mode == "test":
+            fg_ratio = 0.0
+        elif 'railway' in tgt_full_name:
+            fg_ratio = 0.01
+        else:
+            fg_ratio = self.fg_ratio
         # parse available classes of the current target image
         tgt_info = self.label_ratios[tgt_full_name]
-        tgt_available_classes = [k for k, v in tgt_info.items() if v > self.fg_ratio]
+        tgt_available_classes = [k for k, v in tgt_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']]
 
         # parse available classes of the current source images
         src_available_classes = []
         for src_full_name in src_full_names:
             src_info = self.label_ratios[src_full_name]
-            src_available_classes.extend([k for k, v in src_info.items() if v > self.fg_ratio])
+            src_available_classes.extend([k for k, v in src_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']])
         src_available_classes = list(set(src_available_classes))
 
-        # cal sample probability: p=0.75 to select a class that is present in both src and tgt image
-        # p=0.25 to select a class that is present in src image but not present in tgt image
-        available_classes = list(set(tgt_available_classes) & set(src_available_classes))
+        # cal sample probability: p to select a class that is present in both src and tgt image
+        # prob 1-p to select a class that is present in src image but not present in tgt image
+        available_classes = list(set(tgt_available_classes) | set(src_available_classes))
         intersect_classes = [x for x in available_classes if x in src_available_classes]
-        probs = [0.75 if x in intersect_classes else 0.25 for x in available_classes]
+        p = 0.8
+        probs = [p if x in intersect_classes else 1-p for x in available_classes]
 
-        assert len(available_classes) > 0, f"no available classes for {tgt_full_name}, src: {src_full_names}, tgt: {tgt_info}, src: {src_info}"
-        probs = np.array(probs) / np.sum(probs)
-        selected_cls = np.random.choice(available_classes, p=probs)
+        if len(available_classes) == 0:
+            Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Selecting background class.")
+            selected_cls = "background"
+        else:
+            probs = np.array(probs) / np.sum(probs)
+            selected_cls = np.random.choice(available_classes, p=probs)
 
+        # print("--------------------------------")
+        # print("available classes:", available_classes)
+        # print("probs:", probs)
+        # print("intersect classes:", intersect_classes)
+        # print("selected class:", selected_cls)
+        
         return selected_cls
 
     def __len__(self):
@@ -259,8 +284,10 @@ class SynTraDataset(Dataset):
         lbls = []
         for img_full_name in [tgt_full_name] + src_full_names.tolist():
             ds, img_name = img_full_name.rsplit(".", 1)
-            img = cv2.imread(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'), cv2.IMREAD_UNCHANGED)
-            lbl = cv2.imread(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'), cv2.IMREAD_UNCHANGED)
+            img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
+            img = np.array(img)
+            lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
+            lbl = np.array(lbl)
             lbl = np.all(lbl == selected_color, axis=-1)
             imgs.append(img)
             lbls.append(lbl)
@@ -268,21 +295,26 @@ class SynTraDataset(Dataset):
         # self.visualize(img, lbl)
         imgs, lbls = self.transform(imgs, lbls)
         # self.visualize(src_img, src_lbl, tgt_img, tgt_lbl)
-        src_imgs = imgs[1:]
+        src_imgs = torch.stack(imgs[1:], 0)
         tgt_img = imgs[0]
-        src_lbls = lbls[1:]
+        src_lbls = torch.stack(lbls[1:], 0)
         tgt_lbl = lbls[0]
-        src_lbl = src_lbl[::4, ::4]
+        src_lbls = src_lbls[..., ::4, ::4]
         # tgt_lbl = tgt_lbl[::4, ::4]
         aux = {'src_name': src_full_names, 'tgt_name': tgt_full_name}
         # print(src_img_name, tgt_image_name)
         return src_imgs, src_lbls, tgt_img, tgt_lbl, aux
 
-    def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl):
-        cv2.imshow('src_img', src_img.numpy().transpose(1, 2, 0))
-        cv2.imshow('src_lbl', src_lbl.numpy().astype(np.uint8) * 255)
-        cv2.imshow('tgt_img', tgt_img.numpy().transpose(1, 2, 0))
-        cv2.imshow('tgt_lbl', tgt_lbl.numpy().astype(np.uint8) * 255)
+    def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl, aux):
+        src_img_vis = src_img[0].numpy().transpose(1, 2, 0)
+        src_lbl_vis = src_lbl[0].unsqueeze(0).repeat(3, 1, 1).numpy().transpose(1, 2, 0).astype(np.uint8) * 255
+        # upscale src label for visualization
+        src_lbl_vis = cv2.resize(src_lbl_vis, (src_img_vis.shape[1], src_img_vis.shape[0]), interpolation=cv2.INTER_NEAREST)
+        tgt_img_vis = tgt_img.numpy().transpose(1, 2, 0)
+        tgt_lbl_vis = tgt_lbl.unsqueeze(0).repeat(3, 1, 1).numpy().transpose(1, 2, 0).astype(np.uint8) * 255
+        # concat images for visualization
+        src_concat = np.concatenate([src_img_vis, src_lbl_vis, tgt_img_vis, tgt_lbl_vis], axis=1)
+        cv2.imshow(aux["src_name"][0] + "/" + aux["tgt_name"], src_concat)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
@@ -325,12 +357,12 @@ class PadToTargetSize:
             for img, lbl in zip(image, label):
                 img, lbl = self.pad_one(img, lbl)
                 image_list.append(img)
-                label_list.append(lbl)
+                label_list.append(lbl.squeeze())
             return image_list, label_list
         else:
             image, label = self.pad_one(image, label)
 
-        return image, label
+        return image, label.squeeze()
 
 
 class MapTransformTrain:
@@ -344,7 +376,7 @@ class MapTransformTrain:
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            # v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
@@ -362,7 +394,7 @@ class MapTransformTrain:
         lbl = self.lbl_transforms(lbl)
         img, lbl = self.pad_transforms(img, lbl)
         img, lbl = self.geometric_transforms(img, lbl)
-        return img, lbl.squeeze()
+        return img, lbl
 
 
 class MapTransformTest:
@@ -387,7 +419,7 @@ class MapTransformTest:
         if lbl is not None:
             lbl = self.lbl_transforms(lbl)
             img, lbl = self.pad_transforms(img, lbl)
-            return img, lbl.squeeze()
+            return img, lbl
         else:
             img, lbl = self.pad_transforms(img, lbl)
             return img
@@ -453,7 +485,9 @@ def generate_meta_info(data_root, merge_water=True):
     print(f"Found {len(stats)} samples.")
     return stats
 
+
 if __name__ == '__main__':
-    dataset = SynTraDataset("/koko/datasets/syntra384", mode="nshot100")
-    for i in dataset:
-        pass
+    dataset = SynTraDataset("/home/yuan/data/HisMap/syntra384", mode="nshot100")
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4, collate_fn=dataset.collate_fn)
+    for d in dataloader:
+        dataset.visualize(*d)

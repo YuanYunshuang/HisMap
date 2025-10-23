@@ -5,14 +5,13 @@ freeze prompt image encoder
 """
 
 # %% setup environment
-import numpy as np
 import os, sys
 import logging
 
 join = os.path.join
 from tqdm import tqdm
 from skimage import transform
-import torch
+
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import monai
@@ -23,16 +22,17 @@ from datetime import datetime
 import shutil
 import glob
 
-from smolsam.modeling.dataset import MapDataset
-from smolsam.modeling.validator import Validator
-from smolsam.modeling.mapsam import MapSAM
-from smolsam.modeling.dora import  DoRA_Sam
-from smolsam import sam_model_registry
-from smolsam.utils.vis import vis_train
-from smolsam.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
+from smolsam2.modeling.dataset import get_dataset
+from smolsam2.modeling.validator import Validator
+from smolsam2.modeling.mapsam import MapSAM
+from smolsam2.modeling.dora import  DoRA_Sam
+from smolsam2 import sam_model_registry
+from smolsam2.utils.vis import vis_train
+from smolsam2.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
+from smolsam2.utils.debug_utils import *
 
 # set seeds
-torch.manual_seed(2023)
+torch.manual_seed(2025)
 torch.cuda.empty_cache()
 
 # torch.distributed.init_process_group(backend="gloo")
@@ -51,7 +51,7 @@ def setup_parser():
         "-d",
         "--root-dir",
         type=str,
-        default="/home/yuan/data/HisMap/SMOLdata",
+        default="/home/yuan/data/HisMap/syntra384",
         help="path to training dataset; two subfolders: lbls and imgs",
     )
     parser.add_argument(
@@ -66,12 +66,13 @@ def setup_parser():
     parser.add_argument("-t", "--task-name", type=str, default="default", help="task name")
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
-    parser.add_argument("-r", "--dora-rank", type=int, default=4)
+    parser.add_argument("-r", "--dora-rank", type=int, default=16)
     parser.add_argument("-a", "--accum-steps", type=int, default=1)
     # dataset
-    parser.add_argument("--data-mode", type=str, default="train50", help="sample list file (.txt).")
-    parser.add_argument("--data-info", type=str, default="dinfo", help="data info file (.json)")
-    parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
+    parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
+    parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
+    parser.add_argument("--data-info", type=str, help="data info file (.json)")
+    parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
@@ -160,7 +161,8 @@ def main():
     ce_loss = nn.BCEWithLogitsLoss(reduction="mean")
 
     # dataset
-    train_dataset = MapDataset(args.root_dir,
+    train_dataset = get_dataset(args.dataset_name,
+                               data_root=args.root_dir,
                                mode=args.data_mode,
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio)
@@ -171,12 +173,14 @@ def main():
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
+        collate_fn=train_dataset.collate_fn
     )
 
     # validation dataset
     validator = None
     if args.validation_data is not None:
-        val_dataset = MapDataset(args.root_dir,
+        val_dataset = get_dataset(args.dataset_name,
+                                 data_root=args.root_dir,
                                  mode=args.validation_data,
                                  info_file=args.data_info,
                                  fg_ratio=args.foreground_ratio)
@@ -186,6 +190,7 @@ def main():
             shuffle=True,
             num_workers=args.num_workers,
             pin_memory=True,
+            collate_fn=val_dataset.collate_fn
         )
         validator = Validator(val_dataloader, device)
 

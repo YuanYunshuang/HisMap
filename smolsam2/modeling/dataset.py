@@ -316,7 +316,6 @@ class SynTraDataset(Dataset):
             selected_colors = [v for k, v in self.label_colors[dataset].items() if k not in ['background', 'nonlabeled']]
             assert len(selected_colors) <= self.num_notions, \
                 f"During test, number of selected notions {len(selected_colors)} should be == {self.num_notions}."
-        print("Selected colors:", selected_colors)
 
         # load images and labels
         imgs = []
@@ -330,7 +329,6 @@ class SynTraDataset(Dataset):
             palette = lbl.getpalette()
             palette = np.array(palette).reshape(-1, 3).tolist()
             selected_color_inds = [palette.index(color) for color in selected_colors]
-            print(f"Selected color indices for {img_full_name}:", selected_color_inds)
             assert 0 < len(selected_color_inds) <= self.num_notions, \
                 f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
             multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)

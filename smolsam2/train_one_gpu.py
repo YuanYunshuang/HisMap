@@ -72,6 +72,7 @@ def setup_parser():
     parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
     parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
     parser.add_argument("--data-info", type=str, help="data info file (.json)")
+    parser.add_argument("--num-src", type=int, default=1, help="number of source images")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     # train
@@ -163,6 +164,7 @@ def main():
     # dataset
     train_dataset = get_dataset(args.dataset_name,
                                data_root=args.root_dir,
+                               num_src=args.num_src,
                                mode="train",
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio)
@@ -264,7 +266,7 @@ def main():
 
             if (step + 1) % 10 == 0:
                 logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
-            if args.debug and (step + 1) % 100 == 0:
+            if args.debug and (step + 1) % 1 == 0:
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
             iter_num += 1
 

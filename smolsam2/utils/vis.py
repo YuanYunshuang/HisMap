@@ -46,33 +46,37 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
 
 
 def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
-    assert img_src.dim() == 5 and img_src.shape[1] == 1, "Only support one src image visualization."
+    assert img_src.dim() == 5  # (bs, T, 3, H, W)
     lbl_src = F.interpolate(
-            lbl_src.squeeze(1).float(),
+            lbl_src.flatten(0, 1).float(),
             img_src.shape[-2:],
             mode="bilinear",
             align_corners=False,
-        ).squeeze(1)
+        )
 
     bs = min(img_src.shape[0], 8)
+    lbl_src = lbl_src.view(img_src.shape[0], img_src.shape[1], img_src.shape[3], img_src.shape[4])
+    T = img_src.shape[1] + 1
 
-    fig, axs = plt.subplots(nrows=bs, ncols=5, figsize=(10, bs*2))
+    ncol = T * 2 + 1
+    fig, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*2, bs*2))
 
-    img_src = img_src.squeeze(1).detach().permute(0, 2, 3, 1).cpu().numpy()
+    img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy()
     img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy()
     lbl_src = lbl_src.detach().cpu().numpy()
     lbl_tgt = lbl_tgt.squeeze(1).detach().cpu().numpy()
-    pred_tgt = pred_tgt.squeeze(1).detach().sigmoid().squeeze(1).cpu().numpy()
+    pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
 
     for i in range(bs):
-        axs[i, 0].imshow(img_src[i][..., ::-1])
-        axs[i, 1].imshow(lbl_src[i])
-        axs[i, 2].imshow(img_tgt[i][..., ::-1])
-        axs[i, 3].imshow(lbl_tgt[i])
-        axs[i, 4].imshow(pred_tgt[i])
+        for t in range(T-1):
+            axs[i, t*2].imshow(img_src[i, t, :, :, ::-1])
+            axs[i, t*2 + 1].imshow(lbl_src[i, t])
+        axs[i, (T-1)*2].imshow(img_tgt[i][..., ::-1])
+        axs[i, T*2-1].imshow(lbl_tgt[i])
+        axs[i, T*2].imshow(pred_tgt[i])
 
     plt.tight_layout()
-    plt.savefig("/home/yuan/Downloads/vis_train.jpg")
+    plt.savefig(f"{os.environ['HOME']}/Downloads/vis_train.jpg")
     plt.close()
 
 

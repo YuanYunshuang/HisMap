@@ -253,7 +253,6 @@ class SynTraDataset(Dataset):
         all_classes = [k for k in tgt_info.keys() if k not in ['background', 'nonlabeled']]
         tgt_available_classes = [k for k, v in tgt_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']]
         tgt_non_available_classes = [k for k in all_classes if tgt_info[k] == 0.0]
-        print("tgt available classes:", tgt_available_classes)
 
         # parse available classes of the current source images
         src_available_classes = []
@@ -262,7 +261,6 @@ class SynTraDataset(Dataset):
             src_info = self.label_ratios[src_full_name]
             src_available_classes.extend([k for k, v in src_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']])
             src_non_available_classes.extend([k for k in all_classes if src_info[k] == 0.0])
-        print("src available classes:", src_available_classes)
 
         # cal sample probability: p to select a class that is present in both src and tgt image
         # prob 1-p to select a class that is present in src image but not present in tgt image
@@ -273,8 +271,7 @@ class SynTraDataset(Dataset):
         p_pos = 0.75 / len(pos_classes) if len(pos_classes) > 0 else 0.75
         p_neg = 0.25 / len(neg_classes) if len(neg_classes) > 0 else 0.25
         probs = [p_pos if x in pos_classes else p_neg for x in available_classes]
-        print("available classes:", available_classes)
-        print("probs:", probs)
+
         if len(available_classes) == 0:
             Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Selecting background class.")
             selected_cls = "background"
@@ -333,13 +330,11 @@ class SynTraDataset(Dataset):
             palette = lbl.getpalette()
             palette = np.array(palette).reshape(-1, 3).tolist()
             selected_color_inds = [palette.index(color) for color in selected_colors]
-            selected_color_inds = sorted(selected_color_inds)
             print(f"Selected color indices for {img_full_name}:", selected_color_inds)
             assert 0 < len(selected_color_inds) <= self.num_notions, \
                 f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
             multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)
             lbl = np.array(lbl.convert("P"))
-            print(f"Unique labels in {img_full_name}:", np.unique(lbl))
             for i, color_idx in enumerate(selected_color_inds):
                 multi_notion_lbl[..., i] = lbl == color_idx
             imgs.append(img)

@@ -9,7 +9,7 @@ from pathlib import Path
 import urllib.request
 import torch
 
-from smolsam.modeling import (
+from smolsam2.modeling import (
     ImageEncoderViT,
     MaskDecoder,
     PromptEncoder,

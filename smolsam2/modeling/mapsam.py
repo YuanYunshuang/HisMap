@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 from typing import Any, Dict, List, Tuple
 
-from map_sam.conditional_sam.modeling.prompt_encoder import ExampleEncoder
+from smolsam2.modeling.prompt_encoder import ExampleEncoder
 
 
 class MapSAM(nn.Module):
@@ -49,32 +49,33 @@ class MapSAM(nn.Module):
 
     def forward(self, img_src, lbl_src, img_tgt):
         image = torch.cat([img_tgt.unsqueeze(1), img_src], dim=1) # (B, T, 3, H, W)
-        B, T, C, H, W = image.shape
+        B, T, _, H, W = image.shape
+        N = lbl_src.shape[2]
         image_embedding = self.image_encoder(image.flatten(0, 1))  # (B*T, 256, 64, 64)
         image_embedding = image_embedding.view(B, T, *image_embedding.shape[1:])  # (B, T, 256, 64, 64)
-        tgt_img_embedding = image_embedding[:, :1].repeat(1, T-1, 1, 1, 1) # (B, T-1, 256, 64, 64)
-        src_img_embedding = image_embedding[:, 1:] # (B, T-1, 256, 64, 64)
+        tgt_img_embedding = image_embedding[:, :1].repeat(1, (T-1)*N, 1, 1, 1) # (B, (T-1)*N, 256, 64, 64)
+        src_img_embedding = image_embedding[:, 1:].unsqueeze(2).repeat(1, 1, N, 1, 1, 1) # (B, T-1, N, 256, 64, 64)
         # do not compute gradients for prompt encoder
         # with torch.no_grad():
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
-            imgs_emb=src_img_embedding.flatten(0, 1),  # (B*(T-1), 256, 64, 64)
-            masks=lbl_src.flatten(0, 1).unsqueeze(1).float(), # (B*(T-1), 1, H, W
+            imgs_emb=src_img_embedding.flatten(0, 2),  # (B*(T-1)*N, 256, 64, 64)
+            masks=lbl_src.flatten(0, 2).unsqueeze(1).float(), # (B*(T-1)*N, 1, H, W
         )
         low_res_masks, _ = self.mask_decoder(
-            image_embeddings=tgt_img_embedding.flatten(0, 1),  # (B, T-1, 256, 64, 64) -> (B*(T-1), 256, 64, 64)
+            image_embeddings=tgt_img_embedding.flatten(0, 1),  # (B, (T-1)*N, 256, 64, 64) -> (B*(T-1)*N, 256, 64, 64)
             image_pe=self.prompt_encoder.get_dense_pe(),  # (1, 256, 24, 24)
-            sparse_prompt_embeddings=sparse_embeddings.repeat(T-1, 1, 1),  # (B*(T-1), N_sparse, 256)
-            dense_prompt_embeddings=dense_embeddings,  # (B*(T-1), 256, 64, 64)
+            sparse_prompt_embeddings=sparse_embeddings,  # (B*(T-1)*N, N_sparse, 256)
+            dense_prompt_embeddings=dense_embeddings,  # (B*(T-1)*N, 256, 64, 64)
             multimask_output=False,
         )
-        low_res_masks = low_res_masks.view(B, T-1, *low_res_masks.shape[1:])  # (B, T-1, 1, 96, 96)
-        low_res_masks = low_res_masks.max(dim=1).values  # (B, 1, 96, 96)
+        low_res_masks = low_res_masks.view(B, T-1, N, *low_res_masks.shape[1:])  # (B, T-1, N, 1, 96, 96)
+        low_res_masks = low_res_masks.max(dim=1).values  # (B, N, 1, 96, 96)
         ori_res_masks = F.interpolate(
-            low_res_masks,
+            low_res_masks.flatten(0, 1),  # (B*N, 1, 96, 96)
             size=(H, W),
             mode="bilinear",
             align_corners=False,
-        )
+        ).view(B, N, 1, H, W)  # (B, N, 1, H, W)
         return ori_res_masks
 
     def postprocess_masks(

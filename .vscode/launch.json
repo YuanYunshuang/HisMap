@@ -24,7 +24,7 @@
             "type": "debugpy",
             "request": "launch",
             "name": "Testing",
-            "program": "${workspaceFolder}/smolsam2/inference.py",
+            "program": "${workspaceFolder}/smolsam2/test.py",
             // "args": [
             //     "--config",
             //     "configs/syntra_ce_loss.yaml"

@@ -163,7 +163,7 @@ def main():
     # dataset
     train_dataset = get_dataset(args.dataset_name,
                                data_root=args.root_dir,
-                               mode=args.data_mode,
+                               mode="train",
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio)
     logger.info(f"# training samples: {len(train_dataset)}")
@@ -181,7 +181,7 @@ def main():
     if args.validation_data is not None:
         val_dataset = get_dataset(args.dataset_name,
                                  data_root=args.root_dir,
-                                 mode=args.validation_data,
+                                 mode="train",
                                  info_file=args.data_info,
                                  fg_ratio=args.foreground_ratio)
         val_dataloader = DataLoader(

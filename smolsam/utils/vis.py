@@ -8,6 +8,7 @@ import torch
 
 def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, label_only=False):
     bs = pred_tgt.shape[0]
+    assert img_src.shape[1] == 1, "Currently only support single source image"
 
     if label_only:
         inf_dir = os.path.join(out_dir, f'inf_labels')
@@ -30,7 +31,7 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
         img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
         lbl_src = lbl_src.detach().cpu().numpy()
         lbl_tgt = lbl_tgt.detach().cpu().numpy()
-        pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
+        pred_tgt = pred_tgt.detach().sigmoid().squeeze(1).cpu().numpy()
 
         for i in range(bs):
             midbar = np.zeros_like(img_src[0, :, :10]) + 0.5

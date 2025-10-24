@@ -178,7 +178,18 @@ class MapDataset(Dataset):
 
 
 class SynTraDataset(Dataset):
-    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.05):
+    FIXED_NOTION_IDS = {
+        'background': 0,
+        'forest': 1,
+        'grass': 2,
+        'settlement': 3,
+        'water': 4,
+        'railway': 5,
+        'vineyard': 6,
+        'nonlabeled': 255,
+    }
+    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
+                 info_file=None, fg_ratio=0.05, filtering_keys=None):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -200,7 +211,6 @@ class SynTraDataset(Dataset):
         self.num_notions = num_notions
         self.num_src = num_src
         self.mode = mode
-        self.fix_src_lbl = fix_src_lbl
         self.fg_ratio = fg_ratio
 
         if info_file is None:
@@ -217,8 +227,16 @@ class SynTraDataset(Dataset):
                 self.label_ratios.update(json.load(f))
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
                 self.label_colors[ds] = json.load(f)
-
-        self.file_list = list(self.src_pool.keys())
+        
+        if filtering_keys is not None:
+            filtering_keys = filtering_keys.split(",")
+            filtered_file_list = []
+            for fname in self.src_pool.keys():
+                if any([k in fname for k in filtering_keys]):
+                    filtered_file_list.append(fname)
+            self.file_list = filtered_file_list
+        else:
+            self.file_list = list(self.src_pool.keys())
 
         self.transform = MapTransformTrain() if 'train' in mode or 'nshot' in mode else MapTransformTest()
         print(f"Number of {mode} images: {len(self.file_list)}")
@@ -232,6 +250,7 @@ class SynTraDataset(Dataset):
             fg_ratio = self.fg_ratio
         # parse available classes of the current target image
         tgt_info = self.label_ratios[tgt_full_name]
+        all_classes = [k for k in tgt_info.keys() if k not in ['background', 'nonlabeled']]
         tgt_available_classes = [k for k, v in tgt_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']]
 
         # parse available classes of the current source images
@@ -239,14 +258,16 @@ class SynTraDataset(Dataset):
         for src_full_name in src_full_names:
             src_info = self.label_ratios[src_full_name]
             src_available_classes.extend([k for k, v in src_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']])
-        src_available_classes = list(set(src_available_classes))
+        src_available_classes = set(src_available_classes)
 
         # cal sample probability: p to select a class that is present in both src and tgt image
         # prob 1-p to select a class that is present in src image but not present in tgt image
-        available_classes = list(set(tgt_available_classes) | set(src_available_classes))
-        intersect_classes = [x for x in available_classes if x in src_available_classes]
-        p = 0.8
-        probs = [p if x in intersect_classes else 1-p for x in available_classes]
+        pos_classes = set(tgt_available_classes) & set(src_available_classes)
+        union = set(tgt_available_classes) | set(src_available_classes)
+        neg_classes = (src_available_classes - pos_classes) & (set(all_classes) - union)
+        available_classes = list(pos_classes & neg_classes)
+        p = 0.75
+        probs = [p if x in pos_classes else 1-p for x in available_classes]
 
         if len(available_classes) == 0:
             Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Selecting background class.")
@@ -262,6 +283,19 @@ class SynTraDataset(Dataset):
         # print("selected class:", selected_cls)
         
         return selected_cls
+    
+    def _select_src_samples(self, tgt_full_name):
+        src_full_names = self.src_pool[tgt_full_name]['src_samples']
+        src_dists = self.src_pool[tgt_full_name]['distances']
+        if self.mode == "train":
+            # random select num_src from the available src images
+            src_full_names = np.random.choice(src_full_names, self.num_src, replace=len(src_full_names)<self.num_src).tolist()
+        else:
+            # select top-k closest src images
+            sorted_indices = np.argsort(src_dists)
+            src_full_names = [src_full_names[i] for i in sorted_indices[:self.num_src]]
+        return src_full_names
+
 
     def __len__(self):
         return len(self.file_list)
@@ -269,35 +303,38 @@ class SynTraDataset(Dataset):
     def __getitem__(self, index):
         tgt_full_name = self.file_list[index]
         dataset, _ = tgt_full_name.rsplit(".", 1)
-        # random select num_src from the available src images
-        src_full_names = self.src_pool[tgt_full_name]['src_samples']
-        src_full_names = np.random.choice(src_full_names, self.num_src, replace=len(src_full_names)<self.num_src)
+        src_full_names = self._select_src_samples(tgt_full_name)
 
-        if self.fix_src_lbl > 0:
-            selected_cls = self.fix_src_lbl
+        if self.mode == "train":
+            selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names) 
+            selected_colors = [self.label_colors[dataset][selected_cls]]
         else:
-            selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names)
-        
-        selected_color = self.label_colors[dataset][selected_cls]
+            # for test mode, use all notions
+            selected_colors = [v for k, v in self.label_colors[dataset].items() if k not in ['background', 'nonlabeled']]
+            assert len(selected_colors) <= self.num_notions, \
+                f"During test, number of selected notions {len(selected_colors)} should be == {self.num_notions}."
 
         # load images and labels
         imgs = []
         lbls = []
-        for img_full_name in [tgt_full_name] + src_full_names.tolist():
+        for img_full_name in [tgt_full_name] + src_full_names:
             ds, img_name = img_full_name.rsplit(".", 1)
             img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
             img = np.array(img)
             lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
             # get selected color idx
             palette = lbl.getpalette()
-            palette = np.array(palette).reshape(-1, 3)
-            selected_color_idx = np.where((palette == selected_color).all(axis=1))[0]
-            if len(selected_color_idx) == 0:
-                raise ValueError(f"Selected color {selected_color} not found in palette.")
-            lbl = np.array(lbl)
-            lbl = lbl == selected_color_idx
+            palette = np.array(palette).reshape(-1, 3).tolist()
+            selected_color_inds = [palette.index(color) for color in selected_colors]
+            selected_color_inds = sorted(selected_color_inds)
+            assert 0 < len(selected_color_inds) <= self.num_notions, \
+                f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
+            multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)
+            lbl = np.array(lbl.convert("P"))
+            for i, color_idx in enumerate(selected_color_inds):
+                multi_notion_lbl[..., i] = lbl == color_idx
             imgs.append(img)
-            lbls.append(lbl)
+            lbls.append(multi_notion_lbl)
 
         # self.visualize(img, lbl)
         imgs, lbls = self.transform(imgs, lbls)
@@ -364,12 +401,12 @@ class PadToTargetSize:
             for img, lbl in zip(image, label):
                 img, lbl = self.pad_one(img, lbl)
                 image_list.append(img)
-                label_list.append(lbl.squeeze())
+                label_list.append(lbl)
             return image_list, label_list
         else:
             image, label = self.pad_one(image, label)
 
-        return image, label.squeeze()
+        return image, label
 
 
 class MapTransformTrain:
@@ -448,9 +485,9 @@ class MapTransformTrain:
         img, lbl = self.geometric_transforms(img, lbl)
 
         if isinstance(lbl, list):
-            lbl = [l.squeeze() for l in lbl]
+            lbl = [l for l in lbl]
         else:
-            lbl = lbl.squeeze()
+            lbl = lbl
         return img, lbl
 
 

@@ -325,6 +325,7 @@ def main():
         with open(join(model_save_path, "mapsam_loss.txt"), "w") as f:
             for x, y in zip(losses, lrs):
                 f.write(f'{y:.6f}, {x:.6f}\n')
+                
         # %% plot loss
         if args.plot_loss:
             import matplotlib.pyplot as plt

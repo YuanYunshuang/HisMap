@@ -189,7 +189,7 @@ class SynTraDataset(Dataset):
         'nonlabeled': 255,
     }
     def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
-                 info_file=None, fg_ratio=0.05, filtering_keys=None):
+                 info_file=None, fg_ratio=0.05, pos_prob=0.8, filtering_keys=None):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -212,6 +212,7 @@ class SynTraDataset(Dataset):
         self.num_src = num_src
         self.mode = mode
         self.fg_ratio = fg_ratio
+        self.pos_prob = pos_prob
 
         if info_file is None:
             info_file = f"paring_{mode}_intercls.json" 
@@ -268,8 +269,8 @@ class SynTraDataset(Dataset):
         union = set(tgt_available_classes) | set(src_available_classes)
         neg_classes = (set(src_available_classes) - pos_classes) | (set(src_non_available_classes) & set(tgt_non_available_classes))
         available_classes = list(pos_classes | neg_classes)
-        p_pos = 0.75 / len(pos_classes) if len(pos_classes) > 0 else 0.75
-        p_neg = 0.25 / len(neg_classes) if len(neg_classes) > 0 else 0.25
+        p_pos = self.pos_prob / len(pos_classes) if len(pos_classes) > 0 else self.pos_prob
+        p_neg = (1 - self.pos_prob) / len(neg_classes) if len(neg_classes) > 0 else (1 - self.pos_prob)
         probs = [p_pos if x in pos_classes else p_neg for x in available_classes]
 
         if len(available_classes) == 0:

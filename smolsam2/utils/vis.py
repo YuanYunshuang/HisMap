@@ -59,7 +59,7 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
     T = img_src.shape[1] + 1
 
     ncol = T * 2 + 1
-    fig, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*2, bs*2))
+    _, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*2, bs*2))
 
     img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy()
     img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy()

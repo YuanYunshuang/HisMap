@@ -45,7 +45,7 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
             cv2.imwrite(os.path.join(inf_dir, names[i] + '.png'), img)
 
 
-def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
+def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num):
     assert img_src.dim() == 5  # (bs, T, 3, H, W)
     lbl_src = F.interpolate(
             lbl_src.flatten(0, 1).float(),
@@ -76,7 +76,8 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt):
         axs[i, T*2].imshow(pred_tgt[i])
 
     plt.tight_layout()
-    plt.savefig(f"{os.environ['HOME']}/Downloads/vis_train.jpg")
+    os.makedirs(f"{os.environ['HOME']}/Downloads/vis_train", exist_ok=True)
+    plt.savefig(f"{os.environ['HOME']}/Downloads/vis_train/{iter_num}.jpg")
     plt.close()
 
 

@@ -22,12 +22,11 @@ from datetime import datetime
 import shutil
 import glob
 
-from smolsam2.modeling.dataset import get_dataset
+from smolsam2.modeling.dataset2 import get_dataset
 from smolsam2.modeling.validator import Validator
 from smolsam2.modeling.mapsam import MapSAM
 from smolsam2.modeling.dora import  DoRA_Sam
 from smolsam2 import sam_model_registry
-from smolsam2.utils.vis import vis_train
 from smolsam2.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
 from smolsam2.utils.debug_utils import *
 
@@ -267,7 +266,8 @@ def main():
             if (step + 1) % 10 == 0:
                 logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
             if args.debug and (step + 1) % 100 == 0:
-                vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred)
+                from smolsam2.utils.vis import vis_train
+                vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
             iter_num += 1
 
         epoch_loss /= max(step, 1)

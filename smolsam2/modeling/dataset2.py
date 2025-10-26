@@ -233,18 +233,19 @@ class SynTraDataset(Dataset):
         # parse available classes of the current target image
         tgt_info = self.label_ratios[tgt_full_name]
         tgt_available_classes = [k for k, v in tgt_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']]
+        tgt_available_classes = set(tgt_available_classes)
 
         # parse available classes of the current source images
         src_available_classes = []
         for src_full_name in src_full_names:
             src_info = self.label_ratios[src_full_name]
             src_available_classes.extend([k for k, v in src_info.items() if v > fg_ratio and k not in ['background', 'nonlabeled']])
-        src_available_classes = list(set(src_available_classes))
+        src_available_classes = set(src_available_classes)
 
         # cal sample probability: p to select a class that is present in both src and tgt image
         # prob 1-p to select a class that is present in src image but not present in tgt image
-        available_classes = list(set(tgt_available_classes) | set(src_available_classes))
-        intersect_classes = [x for x in available_classes if x in src_available_classes]
+        available_classes = list(src_available_classes)
+        intersect_classes = list(src_available_classes & tgt_available_classes)
         p = 0.8
         probs = [p if x in intersect_classes else 1-p for x in available_classes]
 

@@ -248,13 +248,13 @@ class SynTraDataset(Dataset):
         intersect_classes = list(src_available_classes & tgt_available_classes)
         p = 0.8
         probs = [p if x in intersect_classes else 1-p for x in available_classes]
-
+        
         if len(available_classes) == 0:
-            Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Selecting background class.")
-            selected_cls = "background"
-        else:
-            probs = np.array(probs) / np.sum(probs)
-            selected_cls = np.random.choice(available_classes, p=probs)
+            Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Return None.")
+            return None
+        
+        probs = np.array(probs) / np.sum(probs)
+        selected_cls = np.random.choice(available_classes, p=probs)
 
         # print("--------------------------------")
         # print("available classes:", available_classes)
@@ -279,7 +279,7 @@ class SynTraDataset(Dataset):
         else:
             selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names)
         
-        selected_color = self.label_colors[dataset][selected_cls]
+        selected_color = self.label_colors[dataset][selected_cls] if selected_cls is not None else None
 
         # load images and labels
         imgs = []
@@ -288,17 +288,21 @@ class SynTraDataset(Dataset):
             ds, img_name = img_full_name.rsplit(".", 1)
             img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
             img = np.array(img)
+            imgs.append(img)
+
             lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
             # get selected color idx
             palette = lbl.getpalette()
             palette = np.array(palette).reshape(-1, 3)
-            selected_color_idx = np.where((palette == selected_color).all(axis=1))[0]
-            if len(selected_color_idx) == 0:
-                raise ValueError(f"Selected color {selected_color} not found in palette.")
-            lbl = np.array(lbl)
-            lbl = lbl == selected_color_idx
-            imgs.append(img)
-            lbls.append(lbl[..., None])
+            if selected_cls is None:
+                lbls.append(np.zeros(lbl.size[::-1] + (1,), dtype=bool))
+            else:
+                selected_color_idx = np.where((palette == selected_color).all(axis=1))[0]
+                if len(selected_color_idx) == 0:
+                    raise ValueError(f"Selected color {selected_color} not found in palette.")
+                lbl = np.array(lbl)
+                lbl = lbl == selected_color_idx
+                lbls.append(lbl[..., None])
 
         # self.visualize(img, lbl)
         imgs, lbls = self.transform(imgs, lbls)
@@ -545,7 +549,10 @@ def generate_meta_info(data_root, merge_water=True):
 
 
 if __name__ == '__main__':
-    dataset = SynTraDataset("/home/yuan/data/HisMap/syntra384", mode="nshot100")
+    dataset = SynTraDataset("/koko/datasets/SMOL_syntra", info_file="pairing_train_100shot_train_100shot_intercls.json", mode="train")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4, collate_fn=dataset.collate_fn)
-    for d in dataloader:
-        dataset.visualize(*d)
+    for d in dataset:
+         src_img, src_lbl, tgt_img, tgt_lbl, aux = d
+         if src_lbl.sum() == 0 and tgt_lbl.sum() > 0:
+             print(src_img.shape, src_lbl.shape, tgt_img.shape, tgt_lbl.shape, aux)
+             print("empty src lbl")

@@ -70,6 +70,7 @@ def setup_parser():
     parser.add_argument("-kw", "--keywords", type=str, default='hameln', help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
     parser.add_argument("--dataset-name", type=str, default='syntra')
     parser.add_argument("--data-info", type=str, default="pairing_train_100shot_test_intercls.json")
+    parser.add_argument("--num-src", type=int, default=1, help="number of source images")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     args = parser.parse_args()
 
@@ -110,15 +111,16 @@ def crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
 
 def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
     if args.save_result:
-        from smolsam.utils.vis import save_results
+        from smolsam2.utils.vis import save_results
     if args.debug:
-        from smolsam.utils.vis import vis_train
+        from smolsam2.utils.vis import vis_train
     losses = []
     evals = []
     test_dataset = get_dataset(args.dataset_name,
                                data_root=args.root_dir,
                                info_file=args.data_info,
                                num_notions=num_notions,
+                               num_src=args.num_src,
                                fg_ratio=args.foreground_ratio,
                                filtering_keys=args.keywords,
                                mode="test")
@@ -213,6 +215,7 @@ def main():
 
     # %% test
     num_notions = {'railway': 1, 'vineyard': 1}
+    num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
     for kw, n in num_notions.items():
         args.keywords = kw
         single_test(n, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)

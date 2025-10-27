@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 import torch
 
+
 def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, label_only=False):
     bs = pred_tgt.shape[0]
 
@@ -20,29 +21,41 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, l
         inf_dir = os.path.join(out_dir, f'inf_plots')
         os.makedirs(inf_dir, exist_ok=True)
         lbl_src = F.interpolate(
-            lbl_src.unsqueeze(1).float(),
+            lbl_src.float(),
             img_src.shape[-2:],
             mode="bilinear",
             align_corners=False,
-        ).squeeze(1)
+        )
 
-        img_src = img_src.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+        lbl_src = lbl_src.view(img_src.shape[0], img_src.shape[1], img_src.shape[3], img_src.shape[4])
+        T = img_src.shape[1] + 1
+
+        img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy() * 0.5 + 0.5
         img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
         lbl_src = lbl_src.detach().cpu().numpy()
-        lbl_tgt = lbl_tgt.detach().cpu().numpy()
-        pred_tgt = pred_tgt.detach().sigmoid().squeeze().cpu().numpy()
+        lbl_tgt = lbl_tgt.squeeze(1).detach().cpu().numpy()
+        pred_tgt = pred_tgt.detach().sigmoid().squeeze(1).squeeze(1).cpu().numpy()
 
-        for i in range(bs):
-            midbar = np.zeros_like(img_src[0, :, :10]) + 0.5
-            img = np.concatenate((
-                img_src[i], midbar,
-                lbl_src[i][..., None][..., [0, 0, 0]], midbar,
+        for i in range(1):
+            midbar = np.zeros_like(img_tgt[0, :, :10]) + 0.5
+            imgs = []
+            for t in range(T-1):
+                imgs.append(img_src[i, t])
+                imgs.append(midbar)
+                imgs.append(lbl_src[i, t][..., None][..., [0, 0, 0]])
+                imgs.append(midbar)
+            
+            imgs.extend([
                 img_tgt[i], midbar,
                 pred_tgt[i][..., None][..., [0, 0, 0]], midbar,
                 lbl_tgt[i][..., None][..., [0, 0, 0]],
-            ), axis=1)
-            img = (img * 255).astype(np.uint8)
-            cv2.imwrite(os.path.join(inf_dir, names[i] + '.png'), img)
+            ])
+            try:
+                img = np.concatenate(imgs, axis=1)
+                img = (img * 255).astype(np.uint8)
+                cv2.imwrite(os.path.join(inf_dir, names[i] + '.png'), img)
+            except:
+                print(f"Failed to save {names[i]}")
 
 
 def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num):

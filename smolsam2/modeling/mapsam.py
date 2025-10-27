@@ -68,14 +68,20 @@ class MapSAM(nn.Module):
             dense_prompt_embeddings=dense_embeddings,  # (B*(T-1)*N, 256, 64, 64)
             multimask_output=False,
         )
-        low_res_masks = low_res_masks.view(B, T-1, N, *low_res_masks.shape[1:])  # (B, T-1, N, 1, 96, 96)
-        low_res_masks = low_res_masks.max(dim=1).values  # (B, N, 1, 96, 96)
+
         ori_res_masks = F.interpolate(
             low_res_masks.flatten(0, 1),  # (B*N, 1, 96, 96)
             size=(H, W),
             mode="bilinear",
             align_corners=False,
         ).view(B, N, 1, H, W)  # (B, N, 1, H, W)
+
+        src_lbl_mask = lbl_src.flatten(3).any(dim=3).view(B, T-1, N, 1, 1, 1)  # (B, T-1, N)
+        neg = torch.log(torch.tensor(1e-4, device=ori_res_masks.device))
+        # set the masks to a very low value where there is no source label
+        x, y, z = torch.where(src_lbl_mask == False)[:3]
+        ori_res_masks[x, y, z] = neg # (B, T-1, N, H, W)
+        ori_res_masks = ori_res_masks.max(dim=1).values  # (B, N, 1, H, W)
         return ori_res_masks
 
     def postprocess_masks(

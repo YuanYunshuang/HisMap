@@ -29,10 +29,10 @@
             "request": "launch",
             "name": "Testing",
             "program": "${workspaceFolder}/smolsam2/test.py",
-            // "args": [
-            //     "--config",
-            //     "configs/syntra_ce_loss.yaml"
-            // ],
+            "args": [
+                "--num-src",
+                "3"
+            ],
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {

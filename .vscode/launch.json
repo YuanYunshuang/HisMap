@@ -30,8 +30,10 @@
             "name": "Testing",
             "program": "${workspaceFolder}/smolsam2/test.py",
             "args": [
-                "--num-src",
-                "3"
+                "-d", "/koko/datasets/SMOL_syntra",
+                "--data-info", "pairing_train_100shot_test_intercls.json",
+                "-w", "smolsam2/logs/src1_data2.2/mapsam_model_latest.pth",
+                "--num-src", "3"
             ],
             "console": "integratedTerminal",
             "justMyCode": false,

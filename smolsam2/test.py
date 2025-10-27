@@ -111,9 +111,9 @@ def crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
 
 def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
     if args.save_result:
-        from smolsam.utils.vis import save_results
+        from smolsam2.utils.vis import save_results
     if args.debug:
-        from smolsam.utils.vis import vis_train
+        from smolsam2.utils.vis import vis_train
     losses = []
     evals = []
     test_dataset = get_dataset(args.dataset_name,

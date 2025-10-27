@@ -15,7 +15,8 @@
                 "--debug",
                 "--num-src", "3",
                 "-t", "src3_data2.2",
-                "--disable-runid"
+                "--disable-runid",
+                "--resume", "smolsam2/logs/src3_data2.2/mapsam_model_latest.pth"
             ],
             "console": "integratedTerminal",
             "justMyCode": false,

@@ -264,22 +264,34 @@ class SynTraDataset(Dataset):
         
         return selected_cls
 
+    def _select_src_samples(self, tgt_full_name):
+        src_full_names = self.src_pool[tgt_full_name]['src_samples']
+        src_dists = self.src_pool[tgt_full_name]['distances']
+        if self.mode == "train":
+            # random select num_src from the available src images
+            src_full_names = np.random.choice(src_full_names, self.num_src, replace=len(src_full_names)<self.num_src).tolist()
+        else:
+            # select top-k closest src images
+            sorted_indices = np.argsort(src_dists)
+            src_full_names = [src_full_names[i] for i in sorted_indices[:self.num_src]]
+        return src_full_names
+
     def __len__(self):
         return len(self.file_list)
 
     def __getitem__(self, index):
         tgt_full_name = self.file_list[index]
         dataset, _ = tgt_full_name.rsplit(".", 1)
-        # random select num_src from the available src images
-        src_full_names = self.src_pool[tgt_full_name]['src_samples']
-        src_full_names = np.random.choice(src_full_names, self.num_src, replace=len(src_full_names)<self.num_src)
+        src_full_names = self._select_src_samples(tgt_full_name)
 
-        if self.fix_src_lbl > 0:
-            selected_cls = self.fix_src_lbl
+        if self.mode == "train":
+            selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names) 
+            selected_colors = [self.label_colors[dataset][selected_cls]]
         else:
-            selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names)
-        
-        selected_color = self.label_colors[dataset][selected_cls] if selected_cls is not None else None
+            # for test mode, use all notions
+            selected_colors = [v for k, v in self.label_colors[dataset].items() if k not in ['background', 'nonlabeled']]
+            assert len(selected_colors) <= self.num_notions, \
+                f"During test, number of selected notions {len(selected_colors)} should be == {self.num_notions}."
 
         # load images and labels
         imgs = []
@@ -288,21 +300,19 @@ class SynTraDataset(Dataset):
             ds, img_name = img_full_name.rsplit(".", 1)
             img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
             img = np.array(img)
-            imgs.append(img)
-
             lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
             # get selected color idx
             palette = lbl.getpalette()
             palette = np.array(palette).reshape(-1, 3)
-            if selected_cls is None:
-                lbls.append(np.zeros(lbl.size[::-1] + (1,), dtype=bool))
-            else:
-                selected_color_idx = np.where((palette == selected_color).all(axis=1))[0]
-                if len(selected_color_idx) == 0:
-                    raise ValueError(f"Selected color {selected_color} not found in palette.")
-                lbl = np.array(lbl)
-                lbl = lbl == selected_color_idx
-                lbls.append(lbl[..., None])
+            selected_color_inds = [palette.index(color) for color in selected_colors]
+            assert 0 < len(selected_color_inds) <= self.num_notions, \
+                f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
+            multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)
+            lbl = np.array(lbl.convert("P"))
+            for i, color_idx in enumerate(selected_color_inds):
+                multi_notion_lbl[..., i] = lbl == color_idx
+            imgs.append(img)
+            lbls.append(multi_notion_lbl)
 
         # self.visualize(img, lbl)
         imgs, lbls = self.transform(imgs, lbls)

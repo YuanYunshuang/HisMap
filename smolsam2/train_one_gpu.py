@@ -75,7 +75,7 @@ def setup_parser():
     parser.add_argument("--num-src", type=int, default=1, help="number of source images")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
-    parser.add_argument("--prob-sampler", action="store_true", default=False)
+    parser.add_argument("--sampler", type=str, default="uniform", help="sampler type: uniform or prob")
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=100000)

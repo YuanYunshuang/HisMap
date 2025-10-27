@@ -1,28 +1,166 @@
+from __future__ import annotations
+import math
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence
+
 import torch
 from torch.utils.data import Sampler
-from typing import Sequence, Iterator, Optional
-
-default_prob_dict = {
-    "hameln": 1.0,
-    "bayern": 1.0,
-    "siegfried": 3.0,
-}
 
 
-def get_sampler(dataset, subset_prob_dict=None, use_default=False) -> Sampler[int]:
-    if subset_prob_dict is None:
-        if use_default:
-            subset_prob_dict = default_prob_dict
-        else:
-            return ProbabilitySampler(probs=[1.0] * len(dataset))
-    
-    probs = []
-    for filename in dataset.file_list:
-        dataset_name = filename.split('.')[0]
-        if dataset_name in subset_prob_dict:
-            probs.append(subset_prob_dict[dataset_name])
+
+
+def get_sampler(dataset, batch_size, sampler_name=='uniform') -> Sampler[int]:
+    if sampler_name == 'prob':
+        default_prob_dict = {
+            "hameln": 1.0,
+            "bayern": 1.0,
+            "siegfried": 3.0,
+        }
+        probs = []
+        for filename in dataset.file_list:
+            dataset_name = filename.split('.')[0]
+            if dataset_name in default_prob_dict:
+                probs.append(default_prob_dict[dataset_name])
         else:
             probs.append(1.0)
+        sampler = ProbabilitySampler(probs)
+    elif sampler_name == 'uniform':
+        return None
+    elif sampler_name == 'grouped_prob':
+        labels = [dataset.subdataset_id(i) for i in range(len(dataset))]
+        groups = group_indices_by_labels(labels)
+        group_probs = [0.2, 0.2, 0.3, 0.3]  # adjust as needed
+        assert batch_size >= len(groups), "batch_size must be >= number of subdatasets"
+
+        sampler = ProbGroupedBatchSampler(
+            groups=groups,
+            batch_size=batch_size,
+            group_probs=group_probs,
+            replacement=True,          # set False to avoid repeats across the epoch
+            generator=torch.Generator().manual_seed(42),
+            # num_batches=None -> inferred
+        )
+    return sampler
+
+
+def group_indices_by_labels(labels: Sequence[int]) -> List[List[int]]:
+    groups: Dict[int, List[int]] = {}
+    for idx, g in enumerate(labels):
+        groups.setdefault(int(g), []).append(idx)
+    # sort keys to have stable group order [0,1,2,3,...]
+    return [groups[k] for k in sorted(groups.keys())]
+
+def group_indices_by_key(num_items: int, key_fn: Callable[[int], int | str]) -> List[List[int]]:
+    groups: Dict[int | str, List[int]] = {}
+    for idx in range(num_items):
+        key = key_fn(idx)
+        groups.setdefault(key, []).append(idx)
+    # stable order by key
+    keys = sorted(groups.keys())
+    return [groups[k] for k in keys]
+
+
+class ProbGroupedBatchSampler(Sampler[List[int]]):
+    """
+    Yields batches of indices where:
+      - At least one sample is taken from each group per batch.
+      - Remaining slots are allocated across groups according to group_probs.
+    """
+    def __init__(
+        self,
+        groups: List[List[int]],
+        batch_size: int,
+        group_probs: Sequence[float],
+        *,
+        replacement: bool = True,
+        generator: Optional[torch.Generator] = None,
+        num_batches: Optional[int] = None,
+    ) -> None:
+        super().__init__(None)
+        if len(groups) == 0:
+            raise ValueError("groups must be non-empty")
+        self.groups = [list(g) for g in groups]
+        self.K = len(self.groups)
+        if batch_size < self.K:
+            raise ValueError(f"batch_size ({batch_size}) must be >= number of groups ({self.K})")
+        self.batch_size = int(batch_size)
+
+        p = torch.as_tensor(group_probs, dtype=torch.double)
+        if p.numel() != self.K:
+            raise ValueError(f"len(group_probs) must equal number of groups ({self.K})")
+        p = p.clamp_min(0)
+        if p.sum() <= 0:
+            raise ValueError("sum(group_probs) must be > 0")
+        self.probs = (p / p.sum()).cpu()
+
+        self.replacement = bool(replacement)
+        self.gen = generator
+        total_items = sum(len(g) for g in self.groups)
+        # sensible default for steps per epoch
+        if num_batches is None:
+            if self.replacement:
+                self.num_batches = math.ceil(total_items / self.batch_size)
+            else:
+                # upper bound: when always needing at least 1 per group
+                self.num_batches = max(1, min(len(g) for g in self.groups))
+        else:
+            self.num_batches = int(num_batches)
+
+        # Prebuild tensors of indices for torch ops
+        self.group_tensors = [torch.tensor(g, dtype=torch.long) for g in self.groups]
+
+    def __len__(self) -> int:
+        return self.num_batches
+
+    def _sample_counts(self) -> List[int]:
+        # guarantee 1 per group, distribute the rest by multinomial
+        remaining = self.batch_size - self.K
+        if remaining == 0:
+            return [1] * self.K
+        # sample how many extra per group
+        draws = torch.multinomial(self.probs, num_samples=remaining, replacement=True, generator=self.gen)
+        extra = torch.bincount(draws, minlength=self.K).tolist()
+        return [1 + e for e in extra]
+
+    def _sample_from_group(self, gidx: int, k: int) -> List[int]:
+        pool = self.group_tensors[gidx]
+        n = pool.numel()
+        if n == 0:
+            raise RuntimeError(f"group {gidx} is empty")
+        if self.replacement or k > n:
+            # allow repeats if needed
+            pos = torch.randint(low=0, high=n, size=(k,), generator=self.gen)
+            return pool[pos].tolist()
+        else:
+            # without replacement within batch
+            perm = torch.randperm(n, generator=self.gen)[:k]
+            return pool[perm].tolist()
+
+    def __iter__(self) -> Iterator[List[int]]:
+        # If replacement=False and we want epoch-wise no repeats, we can track cursors
+        if not self.replacement:
+            # shuffle each group's pool once per epoch and consume sequentially
+            shuffled = [g[torch.randperm(len(g), generator=self.gen)].tolist() for g in self.group_tensors]
+            cursors = [0] * self.K
+
+            for _ in range(self.num_batches):
+                counts = self._sample_counts()
+                batch: List[int] = []
+                for gi, need in enumerate(counts):
+                    remain = len(shuffled[gi]) - cursors[gi]
+                    if remain < need:
+                        # not enough to satisfy this batch -> end epoch early
+                        return
+                    take = shuffled[gi][cursors[gi]: cursors[gi] + need]
+                    cursors[gi] += need
+                    batch.extend(take)
+                yield batch
+        else:
+            for _ in range(self.num_batches):
+                counts = self._sample_counts()
+                batch: List[int] = []
+                for gi, need in enumerate(counts):
+                    batch.extend(self._sample_from_group(gi, need))
+                yield batch
 
 
 class ProbabilitySampler(Sampler[int]):

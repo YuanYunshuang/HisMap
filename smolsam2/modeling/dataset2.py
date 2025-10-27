@@ -8,6 +8,7 @@ import json
 from torch.utils.data import Dataset
 from torchvision.transforms.v2 import functional as F
 from torchvision.transforms import InterpolationMode
+from typing import List
 try:
     from torchvision.transforms import v2
 except:
@@ -158,6 +159,18 @@ class MapDataset(Dataset):
         aux = {'src_name': src_img_name, 'tgt_name': tgt_image_name}
         # print(src_img_name, tgt_image_name)
         return src_img, src_lbl, tgt_img, tgt_lbl, aux
+    
+    def subdataset_id(self, index: int) -> int:
+        # Derive subdataset id from filename prefix before the first '.'
+        # Example: "locA.some_image_name_001.png" -> "locA"
+        fname = self.file_list[index]
+        loc = fname.split(".")[0]
+        # Map loc strings to stable ids [0..K-1]
+        if not hasattr(self, "_loc2id"):
+            # build mapping once
+            uniq: List[str] = sorted({f.split(".")[0] for f in self.file_list})
+            self._loc2id = {v: i for i, v in enumerate(uniq)}
+        return self._loc2id[loc]
 
     def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl):
         cv2.imshow('src_img', src_img.numpy().transpose(1, 2, 0))
@@ -335,6 +348,18 @@ class SynTraDataset(Dataset):
         aux = {'src_name': src_full_names, 'tgt_name': tgt_full_name}
         # print(src_img_name, tgt_image_name)
         return src_imgs, src_lbls, tgt_img, tgt_lbl, aux
+
+    def subdataset_id(self, index: int) -> int:
+        # Derive subdataset id from filename prefix before the first '.'
+        # Example: "locA.some_image_name_001.png" -> "locA"
+        fname = self.file_list[index]
+        loc = fname.split(".")[0]
+        # Map loc strings to stable ids [0..K-1]
+        if not hasattr(self, "_loc2id"):
+            # build mapping once
+            uniq: List[str] = sorted({f.split(".")[0] for f in self.file_list})
+            self._loc2id = {v: i for i, v in enumerate(uniq)}
+        return self._loc2id[loc]
 
     def visualize(self, src_img, src_lbl, tgt_img, tgt_lbl, aux):
         src_img_vis = src_img[0].numpy().transpose(1, 2, 0)

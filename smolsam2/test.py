@@ -70,6 +70,7 @@ def setup_parser():
     parser.add_argument("-kw", "--keywords", type=str, default='hameln', help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
     parser.add_argument("--dataset-name", type=str, default='syntra')
     parser.add_argument("--data-info", type=str, default="pairing_train_100shot_test_intercls.json")
+    parser.add_argument("--num-src", type=int, default=1, help="number of source images")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     args = parser.parse_args()
 
@@ -119,6 +120,7 @@ def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, ou
                                data_root=args.root_dir,
                                info_file=args.data_info,
                                num_notions=num_notions,
+                               num_src=args.num_src,
                                fg_ratio=args.foreground_ratio,
                                filtering_keys=args.keywords,
                                mode="test")
@@ -213,6 +215,7 @@ def main():
 
     # %% test
     num_notions = {'railway': 1, 'vineyard': 1}
+    num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
     for kw, n in num_notions.items():
         args.keywords = kw
         single_test(n, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)

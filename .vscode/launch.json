@@ -11,10 +11,10 @@
                 "/koko/datasets/SMOL_syntra",
                 "--data-info",
                 "pairing_train_100shot_train_100shot_intercls.json",
-                "-bs", "16",
+                "-bs", "8", "-nw", "12", "--a", "4",
                 "--debug",
-                "--num-src", "1",
-                "-t", "src1_data2.2",
+                "--num-src", "3",
+                "-t", "src3_data2.2",
                 "--disable-runid"
             ],
             "console": "integratedTerminal",

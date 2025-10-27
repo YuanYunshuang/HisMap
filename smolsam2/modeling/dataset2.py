@@ -178,7 +178,8 @@ class MapDataset(Dataset):
 
 
 class SynTraDataset(Dataset):
-    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", info_file=None, fix_src_lbl=0, fg_ratio=0.05):
+    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
+                 info_file=None, fg_ratio=0.05, pos_prob=0.8, filtering_keys=None):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -200,7 +201,6 @@ class SynTraDataset(Dataset):
         self.num_notions = num_notions
         self.num_src = num_src
         self.mode = mode
-        self.fix_src_lbl = fix_src_lbl
         self.fg_ratio = fg_ratio
 
         if info_file is None:
@@ -218,7 +218,15 @@ class SynTraDataset(Dataset):
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
                 self.label_colors[ds] = json.load(f)
 
-        self.file_list = list(self.src_pool.keys())
+        if filtering_keys is not None:
+            filtering_keys = filtering_keys.split(",")
+            filtered_file_list = []
+            for fname in self.src_pool.keys():
+                if any([k in fname for k in filtering_keys]):
+                    filtered_file_list.append(fname)
+            self.file_list = filtered_file_list
+        else:
+            self.file_list = list(self.src_pool.keys())
 
         self.transform = MapTransformTrain() if 'train' in mode or 'nshot' in mode else MapTransformTest()
         print(f"Number of {mode} images: {len(self.file_list)}")

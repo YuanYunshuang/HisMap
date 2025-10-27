@@ -70,11 +70,11 @@ class MapSAM(nn.Module):
         )
 
         ori_res_masks = F.interpolate(
-            low_res_masks.flatten(0, 1),  # (B*N, 1, 96, 96)
+            low_res_masks,  # (B*(T-1)*N, 1, 96, 96)
             size=(H, W),
             mode="bilinear",
             align_corners=False,
-        ).view(B, N, 1, H, W)  # (B, N, 1, H, W)
+        ).view(B, T-1, N, 1, H, W)  # (B, N, 1, H, W)
 
         src_lbl_mask = lbl_src.flatten(3).any(dim=3).view(B, T-1, N, 1, 1, 1)  # (B, T-1, N)
         neg = torch.log(torch.tensor(1e-4, device=ori_res_masks.device))

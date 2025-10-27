@@ -212,7 +212,7 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            mapsam.load_state_dict(checkpoint["model"])
+            mapsam.load_dora_parameters(checkpoint["dora-model"])
             if not "fewshot" in args.data_mode:
                 optimizer.load_state_dict(checkpoint["optimizer"])
                 start_epoch = checkpoint["epoch"] + 1

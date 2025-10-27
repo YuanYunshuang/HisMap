@@ -286,7 +286,7 @@ class SynTraDataset(Dataset):
 
         if self.mode == "train":
             selected_cls = self.select_tgt_cls(tgt_full_name, src_full_names) 
-            selected_colors = [self.label_colors[dataset][selected_cls]]
+            selected_colors = [self.label_colors[dataset][selected_cls] if selected_cls is not None else None]                 
         else:
             # for test mode, use all notions
             selected_colors = [v for k, v in self.label_colors[dataset].items() if k not in ['background', 'nonlabeled']]
@@ -296,21 +296,22 @@ class SynTraDataset(Dataset):
         # load images and labels
         imgs = []
         lbls = []
-        for img_full_name in [tgt_full_name] + src_full_names.tolist():
+        for img_full_name in [tgt_full_name] + src_full_names:
             ds, img_name = img_full_name.rsplit(".", 1)
             img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
             img = np.array(img)
             lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
             # get selected color idx
             palette = lbl.getpalette()
-            palette = np.array(palette).reshape(-1, 3)
-            selected_color_inds = [palette.index(color) for color in selected_colors]
+            palette = np.array(palette).reshape(-1, 3).tolist()
+            selected_color_inds = [palette.index(color) if color is not None else None for color in selected_colors]
             assert 0 < len(selected_color_inds) <= self.num_notions, \
                 f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
             multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)
             lbl = np.array(lbl.convert("P"))
             for i, color_idx in enumerate(selected_color_inds):
-                multi_notion_lbl[..., i] = lbl == color_idx
+                if color_idx is not None:
+                    multi_notion_lbl[..., i] = lbl == color_idx
             imgs.append(img)
             lbls.append(multi_notion_lbl)
 

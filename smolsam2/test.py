@@ -18,7 +18,7 @@ import monai
 import argparse
 
 
-from smolsam2.modeling.dataset import get_dataset
+from smolsam2.modeling.dataset2 import get_dataset
 from smolsam2.modeling.mapsam import MapSAM
 from smolsam2.modeling.dora import  DoRA_Sam
 from smolsam2 import sam_model_registry

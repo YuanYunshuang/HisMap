@@ -212,7 +212,7 @@ def main():
     mapsam.load_dora_parameters(checkpoint["dora-model"])
 
     # %% test
-    num_notions = {'railway': 1, 'vineyard': 1}
+    num_notions = {'railway': 1, 'vineyard': 1, 'hameln': 4, 'bayern': 3}
     for kw, n in num_notions.items():
         args.keywords = kw
         single_test(n, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)

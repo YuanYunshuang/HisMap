@@ -28,6 +28,7 @@ from smolsam2.modeling.mapsam import MapSAM
 from smolsam2.modeling.dora import  DoRA_Sam
 from smolsam2 import sam_model_registry
 from smolsam2.utils.train_utils import adjust_learning_rate_cosine, adjust_learning_rate_exp_decay
+from smolsam2.utils.sampler import get_sampler
 from smolsam2.utils.debug_utils import *
 
 # set seeds
@@ -74,6 +75,7 @@ def setup_parser():
     parser.add_argument("--num-src", type=int, default=1, help="number of source images")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
+    parser.add_argument("--prob-sampler", action="store_true", default=False)
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=100000)
@@ -168,13 +170,15 @@ def main():
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio)
     logger.info(f"# training samples: {len(train_dataset)}")
+    sampler = get_sampler(train_dataset, use_default=True) if args.prob_sampler else None
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        collate_fn=train_dataset.collate_fn
+        collate_fn=train_dataset.collate_fn,
+        sampler=sampler,
     )
 
     # validation dataset
@@ -216,6 +220,7 @@ def main():
             if not "fewshot" in args.data_mode:
                 optimizer.load_state_dict(checkpoint["optimizer"])
                 start_epoch = checkpoint["epoch"] + 1
+                iter_num = len(train_dataloader) * checkpoint["epoch"] + 1
     if args.use_amp:
         scaler = torch.cuda.amp.GradScaler()
 
@@ -287,6 +292,7 @@ def main():
             "dora-model": state_dict,
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
+            "iter_num": iter_num,
         }
         torch.save(checkpoint, join(model_save_path, "mapsam_model_latest.pth"))
         ## save the best model

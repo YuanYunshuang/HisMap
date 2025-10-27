@@ -8,13 +8,13 @@
             "program": "${workspaceFolder}/smolsam2/train_one_gpu.py",
             "args": [
                 "-d",
-                "/home/yuan/data/HisMap/SMOL_syntra",
+                "/koko/datasets/SMOL_syntra",
                 "--data-info",
                 "pairing_train_100shot_train_100shot_intercls.json",
                 "-bs", "16",
                 "--debug",
                 "--num-src", "1",
-                "-t", "src1",
+                "-t", "src1_data2.2",
                 "--disable-runid"
             ],
             "console": "integratedTerminal",

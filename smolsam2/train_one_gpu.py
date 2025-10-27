@@ -170,16 +170,25 @@ def main():
                                info_file=args.data_info,
                                fg_ratio=args.foreground_ratio)
     logger.info(f"# training samples: {len(train_dataset)}")
-    sampler = get_sampler(train_dataset, use_default=True) if args.prob_sampler else None
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        collate_fn=train_dataset.collate_fn,
-        sampler=sampler,
-    )
+    sampler, batch_sampler = get_sampler(train_dataset, batch_size=args.batch_size, sampler_name=args.sampler) 
+    if batch_sampler is None:
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            collate_fn=train_dataset.collate_fn,
+            sampler=sampler
+        )
+    else:
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_sampler=batch_sampler,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            collate_fn=train_dataset.collate_fn,
+        )
 
     # validation dataset
     validator = None
@@ -292,7 +301,6 @@ def main():
             "dora-model": state_dict,
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
-            "iter_num": iter_num,
         }
         torch.save(checkpoint, join(model_save_path, "mapsam_model_latest.pth"))
         ## save the best model

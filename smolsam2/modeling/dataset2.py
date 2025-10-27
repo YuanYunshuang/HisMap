@@ -352,12 +352,18 @@ class SynTraDataset(Dataset):
     def subdataset_id(self, index: int) -> int:
         # Derive subdataset id from filename prefix before the first '.'
         # Example: "locA.some_image_name_001.png" -> "locA"
+        def get_loc(fname):
+            if 'siegfried' in fname:
+                loc = fname.split(".")[1].split('_')[0]
+            else:
+                loc = fname.split('.')[0]
+            return loc
         fname = self.file_list[index]
-        loc = fname.split(".")[0]
+        loc = get_loc(fname)
         # Map loc strings to stable ids [0..K-1]
         if not hasattr(self, "_loc2id"):
             # build mapping once
-            uniq: List[str] = sorted({f.split(".")[0] for f in self.file_list})
+            uniq: List[str] = sorted({get_loc(f) for f in self.file_list})
             self._loc2id = {v: i for i, v in enumerate(uniq)}
         return self._loc2id[loc]
 
@@ -381,6 +387,7 @@ class SynTraDataset(Dataset):
         src_lbl = torch.stack(src_lbl, dim=0)
         tgt_img = torch.stack(tgt_img, dim=0)
         tgt_lbl = torch.stack(tgt_lbl, dim=0)
+        
         return src_img, src_lbl, tgt_img, tgt_lbl, aux
     
 

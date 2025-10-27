@@ -6,32 +6,28 @@ import torch
 from torch.utils.data import Sampler
 
 
-
-
-def get_sampler(dataset, batch_size, sampler_name=='uniform') -> Sampler[int]:
+def get_sampler(dataset, batch_size, sampler_name='uniform'):
+    prob_dict = {'hameln': 0.4, 'bayern': 0.3, 'railway': 0.15, 'vineyard': 0.15}
     if sampler_name == 'prob':
-        default_prob_dict = {
-            "hameln": 1.0,
-            "bayern": 1.0,
-            "siegfried": 3.0,
-        }
         probs = []
         for filename in dataset.file_list:
-            dataset_name = filename.split('.')[0]
-            if dataset_name in default_prob_dict:
-                probs.append(default_prob_dict[dataset_name])
+            res = filename.split('.')
+            dataset_name = res[1] if 'siegfried' in res else res[0]
+            if dataset_name in prob_dict:
+                probs.append(prob_dict[dataset_name])
         else:
             probs.append(1.0)
         sampler = ProbabilitySampler(probs)
+        batch_sampler = None
     elif sampler_name == 'uniform':
-        return None
+        return None, None
     elif sampler_name == 'grouped_prob':
         labels = [dataset.subdataset_id(i) for i in range(len(dataset))]
         groups = group_indices_by_labels(labels)
-        group_probs = [0.2, 0.2, 0.3, 0.3]  # adjust as needed
+        group_probs = [prob_dict[k] for k in dataset._loc2id.keys()]  # adjust as needed
         assert batch_size >= len(groups), "batch_size must be >= number of subdatasets"
 
-        sampler = ProbGroupedBatchSampler(
+        batch_sampler = ProbGroupedBatchSampler(
             groups=groups,
             batch_size=batch_size,
             group_probs=group_probs,
@@ -39,7 +35,8 @@ def get_sampler(dataset, batch_size, sampler_name=='uniform') -> Sampler[int]:
             generator=torch.Generator().manual_seed(42),
             # num_batches=None -> inferred
         )
-    return sampler
+        sampler = None
+    return sampler, batch_sampler
 
 
 def group_indices_by_labels(labels: Sequence[int]) -> List[List[int]]:

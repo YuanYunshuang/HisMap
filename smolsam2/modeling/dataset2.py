@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import json
 from torch.utils.data import Dataset
+import random
 from torchvision.transforms.v2 import functional as F
 from torchvision.transforms import InterpolationMode
 from typing import List
@@ -192,7 +193,7 @@ class MapDataset(Dataset):
 
 class SynTraDataset(Dataset):
     def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
-                 info_file=None, fg_ratio=0.05, pos_prob=0.8, filtering_keys=None):
+                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -215,6 +216,7 @@ class SynTraDataset(Dataset):
         self.num_src = num_src
         self.mode = mode
         self.fg_ratio = fg_ratio
+        self.pos_prob = pos_prob
 
         if info_file is None:
             info_file = f"paring_{mode}_intercls.json" 
@@ -266,22 +268,19 @@ class SynTraDataset(Dataset):
         # cal sample probability: p to select a class that is present in both src and tgt image
         # prob 1-p to select a class that is present in src image but not present in tgt image
         available_classes = list(src_available_classes)
-        intersect_classes = list(src_available_classes & tgt_available_classes)
-        p = 0.8
-        probs = [p if x in intersect_classes else 1-p for x in available_classes]
+        pos_classes = list(src_available_classes & tgt_available_classes)
+        neg_classes = list(src_available_classes - tgt_available_classes)
         
         if len(available_classes) == 0:
             Warning(f"No available classes for target image {tgt_full_name} and source images {src_full_names}. Return None.")
             return None
         
-        probs = np.array(probs) / np.sum(probs)
-        selected_cls = np.random.choice(available_classes, p=probs)
-
-        # print("--------------------------------")
-        # print("available classes:", available_classes)
-        # print("probs:", probs)
-        # print("intersect classes:", intersect_classes)
-        # print("selected class:", selected_cls)
+        if random.random() < self.pos_prob and len(pos_classes) > 0:
+            selected_cls = np.random.choice(pos_classes)
+        else:
+            if len(neg_classes) == 0:
+                neg_classes = pos_classes
+            selected_cls = np.random.choice(neg_classes)
         
         return selected_cls
 
@@ -432,6 +431,7 @@ class MapTransformTrain:
     def __init__(self, image_size=384, rot_degrees=30, color_jitter=0.01):
         # store params for reproducible geometry sampling per pair
         self.rot_degrees = rot_degrees
+        self.img_size = image_size
 
         self.img_transforms = v2.Compose([
             v2.ToImage(),
@@ -445,9 +445,39 @@ class MapTransformTrain:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
-        self.pad_transforms = v2.Compose([
-            PadToTargetSize(image_size),
-        ])
+        # self.pad_transforms = v2.Compose([
+        #     PadToTargetSize(image_size),
+        # ])
+        self.resize_img = v2.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR)
+        self.resize_lbl = v2.Resize((image_size, image_size), interpolation=InterpolationMode.NEAREST)
+    
+    def resize(self, imgs, lbls):
+        """
+        Resize images and labels to target size. Supports either a single image/label
+        or lists of them.
+        Images use bilinear interpolation and labels use nearest.
+        """
+        def apply_one(i, l):
+            i = self.resize_img(i)
+            if l is not None:
+                l = self.resize_lbl(l.unsqueeze(0)).squeeze(0)
+                try:
+                    l = l.to(torch.bool)
+                except Exception:
+                    # fallback if returned type isn't a tensor
+                    pass
+            return i, l
+
+        if isinstance(imgs, list):
+            img_list = []
+            lbl_list = []
+            for i, ll in zip(imgs, lbls):
+                ii, ll = apply_one(i, ll)
+                img_list.append(ii)
+                lbl_list.append(ll)
+            return img_list, lbl_list
+        else:
+            return apply_one(imgs, lbls)
 
     def geometric_transforms(self, img, lbl):
         """
@@ -500,7 +530,8 @@ class MapTransformTrain:
     def __call__(self, img, lbl):
         img = self.img_transforms(img)
         lbl = self.lbl_transforms(lbl)
-        img, lbl = self.pad_transforms(img, lbl)
+        
+        img, lbl = self.resize(img, lbl)
         img, lbl = self.geometric_transforms(img, lbl)
 
         if isinstance(lbl, list):

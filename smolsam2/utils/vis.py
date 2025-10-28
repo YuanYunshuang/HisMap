@@ -179,7 +179,7 @@ def save_results_v1(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names
                 print(f"Failed to save {names[i]}")
 
 
-def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num):
+def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num, size_per_img=1.0):
     assert img_src.dim() == 5  # (bs, T, 3, H, W)
     lbl_src = F.interpolate(
             lbl_src.flatten(0, 1).float(),
@@ -188,12 +188,12 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num):
             align_corners=False,
         )
 
-    bs = min(img_src.shape[0], 8)
+    bs = img_src.shape[0]
     lbl_src = lbl_src.view(img_src.shape[0], img_src.shape[1], img_src.shape[3], img_src.shape[4])
     T = img_src.shape[1] + 1
 
     ncol = T * 2 + 1
-    _, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*2, bs*2))
+    _, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*size_per_img, bs*size_per_img))
 
     img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy()
     img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy()
@@ -203,12 +203,14 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num):
 
     for i in range(bs):
         for t in range(T-1):
-            axs[i, t*2].imshow(img_src[i, t, :, :, ::-1])
+            axs[i, t*2].imshow(img_src[i, t, :, :])
             axs[i, t*2 + 1].imshow(lbl_src[i, t])
-        axs[i, (T-1)*2].imshow(img_tgt[i][..., ::-1])
+        axs[i, (T-1)*2].imshow(img_tgt[i])
         axs[i, T*2-1].imshow(lbl_tgt[i])
         axs[i, T*2].imshow(pred_tgt[i])
-
+    # set all axes off
+    for ax in axs.flatten():
+        ax.axis('off')
     plt.tight_layout()
     os.makedirs(f"{os.environ['HOME']}/Downloads/vis_train", exist_ok=True)
     plt.savefig(f"{os.environ['HOME']}/Downloads/vis_train/{iter_num}.jpg")

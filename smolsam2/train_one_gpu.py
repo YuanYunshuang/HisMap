@@ -279,7 +279,7 @@ def main():
 
             if (step + 1) % 10 == 0:
                 logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
-            if args.debug and (step + 1) % 100 == 0:
+            if args.debug and (iter_num + 1) % 100 == 0:
                 from smolsam2.utils.vis import vis_train
                 vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
             iter_num += 1

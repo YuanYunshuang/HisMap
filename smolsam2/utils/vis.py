@@ -7,7 +7,128 @@ import cv2
 import torch
 
 
-def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, label_only=False):
+color_map = {
+    'hameln': [
+        (34, 139, 34),    # 'wald' (forest): Forest Green
+        (255, 127, 0),    # 'grünland' (grassland): Orange
+        (220, 20, 60),    # 'siedlung' (settlement): Crimson
+        (30, 144, 255),   # 'wasser' (flowing water): Dodger Blue
+    ],
+    'bayern': [
+        (34, 139, 34),    # 'wald' (forest): Forest Green
+        (255, 127, 0),    # 'grünland' (grassland): Orange
+        (30, 144, 255),   # 'wasser' (flowing water): Dodger Blue
+    ],
+    'siegfried.railway': [
+        (255, 0, 0),      # 'railway': Red
+    ],
+    'siegfried.vineyard': [
+        (139, 69, 19),    # 'vineyard': Saddle Brown
+    ],
+}
+
+
+def overlay_masks_on_image(image, tgt_name, alpha=0.5):    
+    """
+    Overlay segmentation masks on an image.
+
+    Parameters:
+    - image (np.ndarray): The original image (H, W, 3), values in [0, 255]
+    - alpha (np.ndarray): Transparency factor for the masks
+    Returns:
+    - np.ndarray: Image with masks overlaid (H, W, 3)
+    """
+    overlaid_image = image.copy()
+    num_masks = alpha.shape[0]
+
+    # Determine color map based on tgt_name
+    if 'hameln' in tgt_name:
+        colors = color_map['hameln']
+    elif 'bayern' in tgt_name:
+        colors = color_map['bayern']
+    elif 'railway' in tgt_name:
+        colors = color_map['siegfried.railway']
+    elif 'vineyard' in tgt_name:
+        colors = color_map['siegfried.vineyard']
+    else:
+        # Default to random colors if no specific mapping found
+        colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]
+
+    if len(colors) == num_masks - 1:
+        # add background color
+        colors = [(0, 0, 0)] + colors
+    for i in range(num_masks):
+        color = colors[i % len(colors)]
+        mask = np.ones_like(alpha[i]).astype(bool)
+        # mask = np.zeros_like(overlaid_image[..., 0]).astype(bool) 
+        overlaid_image = apply_colored_mask(overlaid_image, mask, color, alpha[i])
+
+    return overlaid_image
+
+
+def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, rescale=0.5):
+    B, T, _, H, W = img_src.shape
+    N = lbl_src.shape[2]
+
+    os.makedirs(out_dir, exist_ok=True)
+    lbl_src = F.interpolate(
+        lbl_src.flatten(0, 1).float(),
+        img_src.shape[-2:],
+        mode="bilinear",
+        align_corners=False,
+    ).view(B, T, N, H, W)
+
+    img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy() * 0.5 + 0.5
+    img_src = (img_src * 255).astype(np.uint8)
+    img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+    img_tgt = (img_tgt * 255).astype(np.uint8)
+    lbl_src = lbl_src.detach().cpu().numpy()
+    lbl_tgt = lbl_tgt.detach().cpu().numpy()
+    pred_tgt = pred_tgt.detach().sigmoid().cpu().numpy()
+
+    for i in range(1):
+        midbar = np.zeros_like(img_tgt[0, :, :10]) + 128
+        row1, row2 = [], []
+        for t in range(T):
+            row1.append(img_src[i, t])
+            row1.append(midbar)
+            overlayed_img = overlay_masks_on_image(img_src[i, t], names[i], alpha=lbl_src[i, t] * 0.5)
+            row2.append(overlayed_img)
+            row2.append(midbar)
+        row1.append(img_tgt[i])
+        row1.append(midbar)
+        overlayed_tgt_img = overlay_masks_on_image(img_tgt[i], names[i], alpha=lbl_tgt[i] * 0.5)
+        row2.append(overlayed_tgt_img)
+        row2.append(midbar)
+
+        pred_prob = pred_tgt[i].squeeze(1) # (N, H, W)
+        prob_bg = 1 - pred_prob.max(axis=0)[None, ...]  # (1, H, W)
+        pred_prob_norm = np.concatenate([prob_bg, pred_prob], axis=0)  # (N+1, H, W)
+        pred_prob_norm = pred_prob_norm / (pred_prob_norm.sum(axis=0, keepdims=True) + 1e-8)
+        pred_inds = np.argmax(pred_prob_norm, axis=0)  # (H, W)
+        pred = np.zeros_like(pred_prob, dtype=bool)  # (N, H, W)
+        for n in range(N):
+            pred[n] = (pred_inds == n + 1)
+
+        overlayed_pred_prob_img = overlay_masks_on_image(img_tgt[i], names[i], alpha=pred_prob_norm)
+        row1.append(overlayed_pred_prob_img)
+        overlayed_pred_img = overlay_masks_on_image(img_tgt[i],  names[i], alpha=pred * 0.5)
+        row2.append(overlayed_pred_img)
+
+        row1 = np.concatenate(row1, axis=1)[..., ::-1]
+        row2 = np.concatenate(row2, axis=1)[..., ::-1]
+        midbar = np.zeros_like(row1[:10, :]) + 128
+        img = np.concatenate([row1, midbar, row2], axis=0)
+        try:
+            if rescale != 1.0:
+                img = cv2.resize(img, (int(img.shape[1]*rescale), int(img.shape[0]*rescale)), 
+                                 interpolation=cv2.INTER_LINEAR)
+            cv2.imwrite(os.path.join(out_dir, names[i] + '.png'), img)  
+        except:
+            print(f"Failed to save {names[i]}")
+
+
+def save_results_v1(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, label_only=False):
     bs = pred_tgt.shape[0]
 
     if label_only:
@@ -118,14 +239,16 @@ def show_masks(masks):
         img[m] = color_mask
     ax.imshow(img)
 
-def apply_colored_mask(image, mask, color):
+
+def apply_colored_mask(image, mask, color, alpha=0.5):
     """
     Apply a semi-transparent RGB color mask to an image.
 
     Parameters:
     - image (np.ndarray): Input image (H, W, 3), dtype=uint8
-    - mask (np.ndarray): Binary mask (H, W), values 0 or 1 or boolean
+    - mask (np.ndarray): Binary mask (H, W), values are float in range [0, 1] or boolean
     - color (tuple): RGB color as a tuple, e.g., (255, 0, 0)
+    - alpha (float or np.ndarray): Transparency factor for the mask overlay
 
     Returns:
     - np.ndarray: Image with color mask applied to masked region
@@ -141,9 +264,17 @@ def apply_colored_mask(image, mask, color):
         color_layer = np.zeros_like(image, dtype=np.uint8)
         color_layer[:, :] = color
 
-        # Alpha blending: 50% transparency
-        alpha = 0.5
-        output_image[mask] = cv2.addWeighted(image[mask], 1 - alpha, color_layer[mask], alpha, 0)
+        # Alpha blending: transparency
+        if isinstance(alpha, float):
+            assert mask.dtype == bool, "Mask must be boolean when alpha is a float"
+            output_image[mask] = cv2.addWeighted(image[mask], 1 - alpha, color_layer[mask], alpha, 0).astype(np.uint8)
+        elif isinstance(alpha, np.ndarray):
+            assert alpha.shape == mask.shape, "Alpha mask must have the same shape as the binary mask"
+            alpha_expanded = np.expand_dims(alpha, axis=-1)  # Shape (H, W, 1)
+            output_image[mask] = (image[mask] * (1 - alpha_expanded[mask]) + 
+                                  color_layer[mask] * alpha_expanded[mask]).astype(np.uint8)
+        else:
+            raise ValueError("Alpha must be either a float or a numpy array")
 
     return output_image
 

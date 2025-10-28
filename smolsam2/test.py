@@ -108,6 +108,17 @@ def crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
             lbl_pred[..., 80:-80, 80:-80],
             mapsam_pred[..., 80:-80, 80:-80])
 
+def pred_to_prob(pred):
+    B, N = pred.shape[:2]
+    prob = pred.sigmoid()
+    # if N > 1:
+    #     # conver N binary masks to multi-class prob, with considering background
+    #     prob_bg = 1 - prob.max(dim=1).values  # (B, 1, H, W)
+    #     prob = torch.cat([prob_bg.unsqueeze(1), prob], dim=1)  # (B, N+1, 1, H, W)
+    #     prob = prob / prob.sum(dim=1, keepdim=True)  # normalize to sum to 1
+    #     prob = prob[:, 1:, ...]  # remove background
+    return prob
+
 
 def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
     if args.save_result:
@@ -160,16 +171,17 @@ def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, ou
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
             if args.save_result:
-                for i in range(num_notions):
-                    save_results(os.path.join(out_dir, f"{str(args.keywords)}_{i+1}"), 
-                                img_src, lbl_src[:, :, i], img_tgt, lbl_tgt[:, i], mapsam_pred[:, i], [x['tgt_name'] for x in meta])
+                save_results(os.path.join(out_dir, f"{str(args.keywords)}"), 
+                                img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, [x['tgt_name'] for x in meta])
             losses.append(loss.item())
 
     avg_loss = np.array(losses).mean()
+    eval_out = []
     out_info = f"Average Loss: {avg_loss:.6f}\n" + \
         "=========== Evaluation Results ===========\n"
     for i in range(num_notions):
         avg_eval = evaluator[i].eval()
+        eval_out.append(avg_eval)
         out_info += \
             f"Notion {i+1}: \n" + \
             f"  IoU (FG): {avg_eval[0]*100:.2f}\n" + \
@@ -179,6 +191,7 @@ def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, ou
             "------------------------------------------\n"
     logger.info(out_info)
     print(out_info)
+    return eval_out
 
 
 def main():
@@ -192,7 +205,8 @@ def main():
     # %% set up model
     os.makedirs(out_dir, exist_ok=True)
     logger = logging.getLogger("SMOL-Seg")
-    logging.basicConfig(filename=join(out_dir, "test.txt"), level=logging.INFO, filemode="a")
+    logging.basicConfig(filename=join(out_dir, f"test_{os.path.basename(args.checkpoint).split('.')[0]}.txt"), 
+                        level=logging.INFO, filemode="a")
 
     sam_model = sam_model_registry[args.model_type](args.sam_ckpt)
     dora_sam = DoRA_Sam(sam_model, args.dora_rank)
@@ -216,9 +230,21 @@ def main():
     # %% test
     num_notions = {'railway': 1, 'vineyard': 1}
     num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
+    eval_results = []
     for kw, n in num_notions.items():
         args.keywords = kw
-        single_test(n, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
+        eval_res = single_test(n, args, device, mapsam, seg_loss, ce_loss, logger, out_dir)
+        eval_results.extend([torch.stack(x, dim=0) for x in eval_res])
+    
+    eval_results = torch.stack(eval_results, dim=0).mean(dim=0)
+    out_str = "############## Overal Mean ##############" + \
+        f"  IoU (FG): {eval_results[0]*100:.2f}\n" + \
+        f"  Precision (FG): {eval_results[1]*100:.2f}\n" + \
+        f"  Recall (FG): {eval_results[2]*100:.2f}\n" + \
+        f"  Accuracy (BG&FG): {eval_results[3]*100:.2f}\n" + \
+        "------------------------------------------\n"
+    logger.info(out_str)
+    print(out_str)
 
 
 

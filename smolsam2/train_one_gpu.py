@@ -67,7 +67,7 @@ def setup_parser():
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
     parser.add_argument("-r", "--dora-rank", type=int, default=16)
-    parser.add_argument("-a", "--accum-steps", type=int, default=1)
+    parser.add_argument("-a", "--accum-steps", type=int, default=4)
     # dataset
     parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
     parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
@@ -320,16 +320,16 @@ def main():
 
         if save_best_flag:
             checkpoint = {
-                "model": state_dict,
+                "dora-model": state_dict,
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }
             torch.save(checkpoint, join(model_save_path, "mapsam_model_best.pth"))
 
         ## save the intermediate model
-        if epoch % 50 == 0 and epoch >= 100:
+        if epoch % 50 == 0:
             checkpoint = {
-                "model": mapsam.state_dict(),
+                "dora-model": state_dict,
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }

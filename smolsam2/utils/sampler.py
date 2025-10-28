@@ -7,7 +7,7 @@ from torch.utils.data import Sampler
 
 
 def get_sampler(dataset, batch_size, sampler_name='uniform'):
-    prob_dict = {'hameln': 0.4, 'bayern': 0.3, 'railway': 0.15, 'vineyard': 0.15}
+    prob_dict = {'hameln': 0.5, 'bayern': 0.4, 'railway': 0.05, 'vineyard': 0.05}
     if sampler_name == 'prob':
         probs = []
         for filename in dataset.file_list:

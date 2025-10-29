@@ -11,3 +11,7 @@ map_sam/logs
 model_zoo/
 .vscode/
 .vscode/launch.json
+syntra/logs
+smolsam/logs
+smolsam2/logs
+checkpoints

@@ -163,9 +163,9 @@ def single_test(num_notions, args, device, mapsam, seg_loss, ce_loss, logger, ou
             lbl_pred = mapsam_pred.sigmoid()
             loss = (seg_loss(mapsam_pred, lbl_tgt.unsqueeze(2)) +
                     ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(2)))
-            if "railway" in args.keywords or "vineyard" in args.keywords:
-                img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred = \
-                crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
+        # if "railway" in args.keywords or "vineyard" in args.keywords:
+        #     img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred = \
+        #     crop_to_test_area(img_src, lbl_src, img_tgt, lbl_tgt, lbl_pred, mapsam_pred)
             for i in range(num_notions):
                 evaluator[i].add_sample(lbl_pred.squeeze(2)[:, i], lbl_tgt[:, i])
 
@@ -228,7 +228,7 @@ def main():
     mapsam.load_dora_parameters(checkpoint["dora-model"])
 
     # %% test
-    num_notions = {'railway': 1, 'vineyard': 1}
+    # num_notions = {'railway': 1, 'vineyard': 1}
     num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
     eval_results = []
     for kw, n in num_notions.items():
@@ -237,7 +237,7 @@ def main():
         eval_results.extend([torch.stack(x, dim=0) for x in eval_res])
     
     eval_results = torch.stack(eval_results, dim=0).mean(dim=0)
-    out_str = "############## Overal Mean ##############" + \
+    out_str = "############## Overal Mean ##############\n" + \
         f"  IoU (FG): {eval_results[0]*100:.2f}\n" + \
         f"  Precision (FG): {eval_results[1]*100:.2f}\n" + \
         f"  Recall (FG): {eval_results[2]*100:.2f}\n" + \

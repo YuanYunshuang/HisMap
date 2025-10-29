@@ -287,6 +287,7 @@ class SynTraDataset(Dataset):
     def _select_src_samples(self, tgt_full_name):
         src_full_names = self.src_pool[tgt_full_name]['src_samples']
         src_dists = self.src_pool[tgt_full_name]['distances']
+
         if self.mode == "train":
             # random select num_src from the available src images
             src_full_names = np.random.choice(src_full_names, self.num_src, replace=len(src_full_names)<self.num_src).tolist()
@@ -542,11 +543,12 @@ class MapTransformTrain:
 
 
 class MapTransformTest:
-    def __init__(self, image_size=384):
+    def __init__(self, image_size=384, color_jitter=0.01):
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
         self.lbl_transforms = v2.Compose([
@@ -554,18 +556,49 @@ class MapTransformTest:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
-        self.pad_transforms = v2.Compose([
-            PadToTargetSize(image_size),
-        ])
+        # self.pad_transforms = v2.Compose([
+        #     PadToTargetSize(image_size),
+        # ])
+
+        self.resize_img = v2.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR)
+        self.resize_lbl = v2.Resize((image_size, image_size), interpolation=InterpolationMode.NEAREST)
+    
+    def resize(self, imgs, lbls):
+        """
+        Resize images and labels to target size. Supports either a single image/label
+        or lists of them.
+        Images use bilinear interpolation and labels use nearest.
+        """
+        def apply_one(i, l):
+            i = self.resize_img(i)
+            if l is not None:
+                l = self.resize_lbl(l.unsqueeze(0)).squeeze(0)
+                try:
+                    l = l.to(torch.bool)
+                except Exception:
+                    # fallback if returned type isn't a tensor
+                    pass
+            return i, l
+
+        if isinstance(imgs, list):
+            img_list = []
+            lbl_list = []
+            for i, ll in zip(imgs, lbls):
+                ii, ll = apply_one(i, ll)
+                img_list.append(ii)
+                lbl_list.append(ll)
+            return img_list, lbl_list
+        else:
+            return apply_one(imgs, lbls)
 
     def __call__(self, img, lbl=None):
         img = self.img_transforms(img)
         if lbl is not None:
             lbl = self.lbl_transforms(lbl)
-            img, lbl = self.pad_transforms(img, lbl)
+            img, lbl = self.resize(img, lbl)
             return img, lbl
         else:
-            img, lbl = self.pad_transforms(img, lbl)
+            img, lbl = self.resize(img, lbl)
             return img
 
 

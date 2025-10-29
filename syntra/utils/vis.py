@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from torch.nn import functional as F
 import numpy as np
 import cv2
-import torch
 
 
 color_map = {

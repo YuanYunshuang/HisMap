@@ -5,22 +5,18 @@ freeze prompt image encoder
 """
 
 # %% setup environment
-import os, sys
+import os
 import logging
 
 join = os.path.join
 from tqdm import tqdm
-from skimage import transform
 
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import monai
-import torch.nn.functional as F
 import argparse
-import random
 from datetime import datetime
 import shutil
-import glob
 
 from syntra.modeling.dataset import get_dataset
 from syntra.modeling.validator import Validator
@@ -52,13 +48,6 @@ def setup_parser():
         default="/home/yuan/data/HisMap/syntra384",
         help="path to training dataset; two subfolders: lbls and imgs",
     )
-    parser.add_argument(
-        "-m",
-        "--model-type",
-        type=str,
-        default="vit_b",
-        help="model type",
-    )
 
     cur_path = os.path.abspath(os.path.dirname(__file__))
     # common parameters
@@ -67,7 +56,10 @@ def setup_parser():
     parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
     # model
     parser.add_argument("-r", "--dora-rank", type=int, default=16)
-    parser.add_argument("-mn", "--model-name", type=str, default="smol")
+    parser.add_argument("-mn", "--model-name", type=str, default="syntra", help="model name: unet or syntra")
+    parser.add_argument("--backbone", type=str, default="vit_b", help="backbone type: vit_h, vit_l, vit_b, hiera_t, hiera_s, hiera_l, hiera_bp")
+    parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
+    parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
     # dataset
     parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
     parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
@@ -264,11 +256,11 @@ def main():
 
             if (step + 1) % 10 == 0:
                 logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
-            if args.debug and (iter_num + 1) % 100 == 0:
-                from syntra.utils.vis import vis_train
-                vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
             iter_num += 1
 
+        if args.debug:
+            from syntra.utils.vis import vis_train
+            vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
         epoch_loss /= max(step, 1)
         losses.append(epoch_loss)
         lrs.append(cur_lr)
@@ -323,16 +315,6 @@ def main():
             for x, y in zip(losses, lrs):
                 f.write(f'{y:.6f}, {x:.6f}\n')
                 
-        # %% plot loss
-        if args.plot_loss:
-            import matplotlib.pyplot as plt
-            plt.plot(losses)
-            plt.title("Dice + Cross Entropy Loss")
-            plt.xlabel("Epoch")
-            plt.ylabel("Loss")
-            plt.savefig(join(model_save_path, args.task_name + "train_loss.png"))
-            plt.close()
-
 
 if __name__ == "__main__":
     main()

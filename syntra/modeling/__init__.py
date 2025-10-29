@@ -47,9 +47,14 @@ def build_prompt_encoder(model_type: str, embed_dim: int = 256, **kwargs):
 
 
 def build_mask_decoder(model_type: str = "default", embed_dim: int = 256, **kwargs):
-    model_types = ["default"]
+    model_types = ["default", "highres"]
     assert model_type in model_types, f"Unknown model type: {model_type}"
-    from .mask_decoders.mask_decoder import MaskDecoder
+    if model_type == "default":
+        from .mask_decoders.mask_decoder import MaskDecoder
+    elif model_type == "highres":
+        from .mask_decoders.mask_decoder_highres import MaskDecoder
+    else:
+        raise ValueError(f"Unknown mask decoder type: {model_type}")
     mask_decoder=MaskDecoder(
             num_multimask_outputs=3,
             transformer=TwoWayTransformer(
@@ -68,18 +73,19 @@ def build_mask_decoder(model_type: str = "default", embed_dim: int = 256, **kwar
 def build_segmentation_model(model_name: str, **kwargs):
     if model_name == "unet":
         raise NotImplementedError("UNet model is not implemented yet.")
-    elif model_name == "smol":
-        img_encoder = build_img_encoder("vit_b", **kwargs)
-        prompt_encoder = build_prompt_encoder("example", **kwargs)
-        mask_decoder = build_mask_decoder("default", **kwargs)
+    elif model_name == "syntra":
+        backbone_type = kwargs.pop('backbone', 'vit_b')
+        prompt_encoder_type = kwargs.pop('prompt_encoder', 'example')
+        mask_decoder_type = kwargs.pop('mask_decoder', 'default')
+        img_encoder = build_img_encoder(backbone_type, **kwargs)
+        prompt_encoder = build_prompt_encoder(prompt_encoder_type, **kwargs)
+        mask_decoder = build_mask_decoder(mask_decoder_type, **kwargs)
         from .models.smol import SMOLModel
         model = SMOLModel(
             image_encoder=img_encoder,
             prompt_encoder=prompt_encoder,
             mask_decoder=mask_decoder,
         )
-    elif model_name == "syntra":
-        pass
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     

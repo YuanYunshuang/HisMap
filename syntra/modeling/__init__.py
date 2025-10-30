@@ -12,24 +12,24 @@ def freeze_model(model: torch.nn.Module):
     return model
 
 
-def build_img_encoder(model_type: str, out_chans: int = 256, pretrained: bool = True, freeze: bool = True, dora_r: int = 0, **kwargs):
+def build_img_encoder(model_type: str, out_chans: int = 256, pretrained: bool = True, freeze: bool = True, dora_rank: int = 0, **kwargs):
     """Build SAM or SAM2 image encoder from model type."""
     model_types = ["vit_h", "vit_l", "vit_b", "hiera_t", "hiera_s", "hiera_l", "hiera_bp"]
     assert model_type in model_types, f"Unknown model type: {model_type}"
     if "vit" in model_type:
         from .backbones.sam.build import build_sam_img_encoder as build_img_encoder
         img_encoder = build_img_encoder(model_type, pretrained=pretrained, out_chans=out_chans, **kwargs)
-        if freeze or dora_r > 0:
+        if freeze or dora_rank > 0:
             img_encoder = freeze_model(img_encoder)
-        if dora_r > 0:
-            img_encoder = DoRAWrapper(img_encoder, r=dora_r)
+        if dora_rank > 0:
+            img_encoder = DoRAWrapper(img_encoder, r=dora_rank)
     elif "hiera" in model_type:
         from .backbones.sam2.build import build_sam2_img_encoder as build_img_encoder
         img_encoder = build_img_encoder(model_type, pretrained=pretrained, out_chans=out_chans, **kwargs)
-        if freeze or dora_r > 0:
+        if freeze or dora_rank > 0:
             img_encoder = freeze_model(img_encoder)
-        if dora_r > 0:
-            img_encoder.trunk = DoRAWrapper(img_encoder.trunk, r=dora_r)
+        if dora_rank > 0:
+            img_encoder.trunk = DoRAWrapper(img_encoder.trunk, r=dora_rank)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     

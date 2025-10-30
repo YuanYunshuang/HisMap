@@ -123,7 +123,7 @@ class DoRAWrapper(nn.ModuleList):
         m_tensors = {}
 
         # save prompt encoder, only `state_dict`, the `named_parameter` is not permitted
-        if isinstance(self, torch.nn.DataParallel) or isinstance(self.sam, torch.nn.parallel.DistributedDataParallel):
+        if isinstance(self, torch.nn.DataParallel):
             state_dict = self.module.state_dict()
         else:
             state_dict = self.state_dict()
@@ -155,9 +155,6 @@ class DoRAWrapper(nn.ModuleList):
 
         self.load_state_dict(model_dict)
 
-
-    def forward(self, batched_input, multimask_output, image_size):
-        return self.sam(batched_input, multimask_output, image_size)
 
 
 if __name__ == "__main__":

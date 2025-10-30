@@ -46,13 +46,6 @@ def setup_parser():
         default="/home/yuan/data/HisMap/SMOL_syntra",
         help="path to training dataset; two subfolders: lbls and imgs",
     )
-    parser.add_argument(
-        "-m",
-        "--model-type",
-        type=str,
-        default="vit_b",
-        help="model type",
-    )
 
     cur_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("-w", "--checkpoint", type=str, default=f"syntra/logs/try1/mapsam_model_latest.pth")

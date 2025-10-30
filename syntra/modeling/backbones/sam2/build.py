@@ -35,7 +35,7 @@ def build_sam2_img_encoder(model_type: str, pretrained=True, out_chans=256, **kw
         backbone_channel_list=parames["neck"]["backbone_channel_list"],
         d_model=out_chans,
         fpn_top_down_levels=parames["neck"]["fpn_top_down_levels"],
-        fpn_interp_model='nearst',
+        fpn_interp_model='nearest',
         position_encoding=PositionEmbeddingSine(
             num_pos_feats=out_chans,
         )

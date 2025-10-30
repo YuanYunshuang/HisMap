@@ -74,22 +74,24 @@ def build_segmentation_model(model_name: str, **kwargs):
     if model_name == "unet":
         raise NotImplementedError("UNet model is not implemented yet.")
     elif model_name == "syntra":
-        backbone_type = kwargs.pop('backbone', 'vit_b')
-        prompt_encoder_type = kwargs.pop('prompt_encoder', 'example')
-        mask_decoder_type = kwargs.pop('mask_decoder', 'default')
-        img_encoder = build_img_encoder(backbone_type, **kwargs)
-        prompt_encoder = build_prompt_encoder(prompt_encoder_type, **kwargs)
-        mask_decoder = build_mask_decoder(mask_decoder_type, **kwargs)
-        from .models.smol import SMOLModel
-        model = SMOLModel(
-            image_encoder=img_encoder,
-            prompt_encoder=prompt_encoder,
-            mask_decoder=mask_decoder,
-        )
+        from .models.syntra import SyntraModel as Model
+    elif model_name == "smol":
+        from .models.smol import SMOLModel as Model
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     
-    return model
+    backbone_type = kwargs.pop('backbone', 'vit_b')
+    prompt_encoder_type = kwargs.pop('prompt_encoder', 'example')
+    mask_decoder_type = kwargs.pop('mask_decoder', 'default')
+    img_encoder = build_img_encoder(backbone_type, **kwargs)
+    prompt_encoder = build_prompt_encoder(prompt_encoder_type, **kwargs)
+    mask_decoder = build_mask_decoder(mask_decoder_type, **kwargs)
+
+    return Model(
+        image_encoder=img_encoder,
+        prompt_encoder=prompt_encoder,
+        mask_decoder=mask_decoder,
+    )
     
 
 

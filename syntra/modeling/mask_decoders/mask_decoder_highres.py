@@ -63,6 +63,12 @@ class MaskDecoder(nn.Module):
             ),
             activation(),
         )
+        self.conv_s0 = nn.Conv2d(
+            transformer_dim, transformer_dim // 8, kernel_size=1, stride=1
+        )
+        self.conv_s1 = nn.Conv2d(
+            transformer_dim, transformer_dim // 4, kernel_size=1, stride=1
+        )
         self.output_hypernetworks_mlps = nn.ModuleList(
             [
                 MLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
@@ -80,6 +86,7 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
+        high_res_features: List[torch.Tensor], 
         multimask_output: bool,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -90,6 +97,7 @@ class MaskDecoder(nn.Module):
           image_pe (torch.Tensor): positional encoding with the shape of image_embeddings
           sparse_prompt_embeddings (torch.Tensor): the embeddings of the points and boxes
           dense_prompt_embeddings (torch.Tensor): the embeddings of the mask inputs
+          high_res_features (List[torch.Tensor]): high resolution features from the image encoder
           multimask_output (bool): Whether to return multiple masks or a single
             mask.
 
@@ -102,6 +110,7 @@ class MaskDecoder(nn.Module):
             image_pe=image_pe[:, :, :image_embeddings.shape[-2], :image_embeddings.shape[-1]],
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
+            high_res_features=high_res_features,
         )
 
         # Select the correct mask or masks for output
@@ -121,6 +130,7 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor, # (B*(T-1)*N, N_sparse, 256)
         dense_prompt_embeddings: torch.Tensor,
+        high_res_features: List[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -148,7 +158,16 @@ class MaskDecoder(nn.Module):
 
         # Upscale mask embeddings and predict masks using the mask tokens
         src = src.transpose(1, 2).view(b, c, h, w)
-        upscaled_embedding = self.output_upscaling(src)
+        # upscaled_embedding = self.output_upscaling(src)
+        dc1, ln1, act1, dc2, act2 = self.output_upscaling
+        feat_s0, feat_s1 = high_res_features
+        feat_s0 = self.conv_s0(feat_s0)
+        feat_s1 = self.conv_s1(feat_s1)
+        feat_s0 = torch.repeat_interleave(feat_s0.unsqueeze(1), b // feat_s0.shape[0], dim=1).flatten(0, 1) # (B*N)xCxHxW
+        feat_s1 = torch.repeat_interleave(feat_s1.unsqueeze(1), b // feat_s1.shape[0], dim=1).flatten(0, 1)
+        upscaled_embedding = act1(ln1(dc1(src) + feat_s1))
+        upscaled_embedding = act2(dc2(upscaled_embedding) + feat_s0)
+
         hyper_in_list: List[torch.Tensor] = []
         for i in range(self.num_mask_tokens):
             hyper_in_list.append(

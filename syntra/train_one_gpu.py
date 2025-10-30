@@ -56,7 +56,7 @@ def setup_parser():
     parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
     # model
     parser.add_argument("-r", "--dora-rank", type=int, default=16)
-    parser.add_argument("-mn", "--model-name", type=str, default="syntra", help="model name: unet or syntra")
+    parser.add_argument("-mn", "--model-name", type=str, default="smol", help="model name: unet or syntra")
     parser.add_argument("--backbone", type=str, default="vit_b", help="backbone type: vit_h, vit_l, vit_b, hiera_t, hiera_s, hiera_l, hiera_bp")
     parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
     parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
@@ -109,22 +109,23 @@ def main():
     shutil.copyfile(
         __file__, join(model_save_path, run_id + "_" + os.path.basename(__file__))
     )
-    logger = logging.getLogger("SMOL-MapSAM")
+    logger = logging.getLogger("SYNTRA")
     logging.basicConfig(filename=join(model_save_path, "log.txt"), level=logging.INFO)
 
     if args.from_scratch:
         args.checkpoint = None
         args.warmup_epochs = 1
-    model = build_segmentation_model(args.model_name).to(device)
+
+    model = build_segmentation_model(**vars(args)).to(device)
     model.train()
 
     logger.info(">>>>>>>>>>>>>>>>>>CONFIGS<<<<<<<<<<<<<<<<")
     for k, v in args.__dict__.items():
         logger.info(f"{k}: {v}")
     logger.info(f"# total parameters: "
-                f"{sum(p.numel() for p in model.parameters())}")  # 93735472
+                f"{sum(p.numel() for p in model.parameters()) / 1024**2:.2f} M")  
     logger.info(f"# trainable parameters: "
-                f"{sum(p.numel() for p in model.parameters() if p.requires_grad)}")  # 93729252
+                f"{sum(p.numel() for p in model.parameters() if p.requires_grad) / 1024**2:.2f} M")  
     if not args.train_prompt_encoder:
         opt_params = list(model.image_encoder.parameters()) + list(
             model.mask_decoder.parameters()

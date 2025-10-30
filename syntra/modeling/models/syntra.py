@@ -6,18 +6,6 @@ from . import SemSegModelBase
 
 
 class SyntraModel(SemSegModelBase):
-    def __init__(
-        self,
-        image_encoder,
-        prompt_encoder,
-        mask_decoder,
-    ):
-        super().__init__(
-            image_encoder=image_encoder,
-            prompt_encoder=prompt_encoder,
-            mask_decoder=mask_decoder,
-        )
-    
     def forward(self, img_src, lbl_src, img_tgt):
         image = torch.cat([img_tgt.unsqueeze(1), img_src], dim=1) # (B, T, 3, H, W)
         B, T, _, H, W = image.shape

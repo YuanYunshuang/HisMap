@@ -1,7 +1,7 @@
 
 import torch
 
-from .utils.dora import DoRAWrapper
+from .utils.dora import wrap_attn_blocks_with_dora
 from .mask_decoders.transformer import TwoWayTransformer
 
 
@@ -22,14 +22,14 @@ def build_img_encoder(model_type: str, out_chans: int = 256, pretrained: bool = 
         if freeze or dora_rank > 0:
             img_encoder = freeze_model(img_encoder)
         if dora_rank > 0:
-            img_encoder = DoRAWrapper(img_encoder, r=dora_rank)
+            img_encoder.blocks = wrap_attn_blocks_with_dora(img_encoder.blocks, r=dora_rank)
     elif "hiera" in model_type:
         from .backbones.sam2.build import build_sam2_img_encoder as build_img_encoder
         img_encoder = build_img_encoder(model_type, pretrained=pretrained, out_chans=out_chans, **kwargs)
         if freeze or dora_rank > 0:
-            img_encoder = freeze_model(img_encoder)
+            img_encoder.trunk = freeze_model(img_encoder.trunk)
         if dora_rank > 0:
-            img_encoder.trunk = DoRAWrapper(img_encoder.trunk, r=dora_rank)
+            img_encoder.trunk.blocks = wrap_attn_blocks_with_dora(img_encoder.trunk.blocks, r=dora_rank)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     

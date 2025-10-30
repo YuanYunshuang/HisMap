@@ -54,6 +54,51 @@ class _DoRA_qkv(nn.Module):
         return F.linear(x, new_weights, self.bias)
 
 
+def wrap_attn_blocks_with_dora(attn_blocks: nn.ModuleList, r: int, dora_layer=None) -> nn.Module:
+    """Wraps the attention blocks of a model with DoRA.
+
+    Args:
+        attn_blocks (nn.ModuleList): The attention blocks of the model.
+        r (int): The rank for the low-rank adaptation.
+        dora_layer (list, optional): List of layer indices to apply DoRA. Defaults to None, which applies DoRA to all layers.
+
+    Returns:
+        nn.Module: The model with attention blocks wrapped with DoRA.
+    """
+    assert r > 0
+    dora_layer = list(range(len(attn_blocks)))  if dora_layer is None else dora_layer
+
+    for t_layer_i, blk in enumerate(attn_blocks):
+        if t_layer_i not in dora_layer:
+            continue
+        w_qkv_linear = blk.attn.qkv
+        dim = w_qkv_linear.in_features
+        weight = w_qkv_linear.weight.data.clone()
+        bias = w_qkv_linear.bias.data.clone()
+        m_q = w_qkv_linear.weight[: dim, :].norm(p=2, dim=0, keepdim=True)
+        m_v = w_qkv_linear.weight[-dim:, :].norm(p=2, dim=0, keepdim=True)
+
+        device = weight.device
+        std_dev = 1 / torch.sqrt(torch.tensor(r, device=device).float())
+        lora_A_q = torch.randn(dim, r, device=device) * std_dev
+        lora_B_q = torch.zeros(r, dim, device=device)
+        lora_A_v = torch.randn(dim, r, device=device) * std_dev
+        lora_B_v = torch.zeros(r, dim, device=device)
+
+        blk.attn.qkv = _DoRA_qkv(
+            weight,
+            bias,
+            dim,
+            m_q,
+            m_v,
+            lora_A_q,
+            lora_B_q,
+            lora_A_v,
+            lora_B_v
+        )
+    return attn_blocks
+
+
 class DoRAWrapper(nn.ModuleList):
     """Applies weight-decomposed low-rank adaptation to a Sam model's image encoder.
 
@@ -154,6 +199,9 @@ class DoRAWrapper(nn.ModuleList):
         model_dict.update(lora_new_state_dict)
 
         self.load_state_dict(model_dict)
+    
+    def forward(self, x):
+        return self.forward(x)
 
 
 

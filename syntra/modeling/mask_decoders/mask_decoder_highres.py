@@ -24,6 +24,7 @@ class MaskDecoder(nn.Module):
         activation: Type[nn.Module] = nn.GELU,
         iou_head_depth: int = 3,
         iou_head_hidden_dim: int = 256,
+        use_high_res_features: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -47,6 +48,7 @@ class MaskDecoder(nn.Module):
         self.transformer = transformer
 
         self.num_multimask_outputs = num_multimask_outputs
+        self.use_high_res_features = use_high_res_features
 
         self.iou_token = nn.Embedding(1, transformer_dim)
         self.num_mask_tokens = num_multimask_outputs + 1
@@ -158,15 +160,18 @@ class MaskDecoder(nn.Module):
 
         # Upscale mask embeddings and predict masks using the mask tokens
         src = src.transpose(1, 2).view(b, c, h, w)
-        # upscaled_embedding = self.output_upscaling(src)
-        dc1, ln1, act1, dc2, act2 = self.output_upscaling
-        feat_s0, feat_s1 = high_res_features
-        feat_s0 = self.conv_s0(feat_s0)
-        feat_s1 = self.conv_s1(feat_s1)
-        feat_s0 = torch.repeat_interleave(feat_s0.unsqueeze(1), b // feat_s0.shape[0], dim=1).flatten(0, 1) # (B*N)xCxHxW
-        feat_s1 = torch.repeat_interleave(feat_s1.unsqueeze(1), b // feat_s1.shape[0], dim=1).flatten(0, 1)
-        upscaled_embedding = act1(ln1(dc1(src) + feat_s1))
-        upscaled_embedding = act2(dc2(upscaled_embedding) + feat_s0)
+
+        if not self.use_high_res_features:
+            upscaled_embedding = self.output_upscaling(src)
+        else:
+            dc1, ln1, act1, dc2, act2 = self.output_upscaling
+            feat_s0, feat_s1 = high_res_features
+            feat_s0 = self.conv_s0(feat_s0)
+            feat_s1 = self.conv_s1(feat_s1)
+            feat_s0 = torch.repeat_interleave(feat_s0.unsqueeze(1), b // feat_s0.shape[0], dim=1).flatten(0, 1) # (B*N)xCxHxW
+            feat_s1 = torch.repeat_interleave(feat_s1.unsqueeze(1), b // feat_s1.shape[0], dim=1).flatten(0, 1)
+            upscaled_embedding = act1(ln1(dc1(src) + feat_s1))
+            upscaled_embedding = act2(dc2(upscaled_embedding) + feat_s0)
 
         hyper_in_list: List[torch.Tensor] = []
         for i in range(self.num_mask_tokens):

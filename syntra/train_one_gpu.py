@@ -6,6 +6,7 @@ freeze prompt image encoder
 
 # %% setup environment
 import os
+import sys
 import logging
 
 join = os.path.join
@@ -36,6 +37,12 @@ os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
 os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
 os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
 os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
+
+
+def add_pythonpath_to_sys_path():
+    if "PYTHONPATH" not in os.environ or not os.environ["PYTHONPATH"]:
+        return
+    sys.path = os.environ["PYTHONPATH"].split(":") + sys.path
 
 
 
@@ -203,7 +210,7 @@ def main():
         if os.path.isfile(args.resume):
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
-            model.load_dora_parameters(checkpoint["model"])
+            model.load_trainable_state_dict(checkpoint["model"])
             if not "fewshot" in args.data_mode:
                 optimizer.load_state_dict(checkpoint["optimizer"])
                 start_epoch = checkpoint["epoch"] + 1
@@ -268,10 +275,7 @@ def main():
         logger.info(f'Time: {datetime.now().strftime("%Y%m%d-%H%M")}, Epoch: {epoch}, Loss: {epoch_loss}')
 
         # get saving parameters
-        if args.save_dora_only:
-            state_dict = model.save_dora_parameters()
-        else:
-            state_dict = model.state_dict()
+        state_dict = model.trainable_state_dict()
         ## save the latest model
         checkpoint = {
             "model": state_dict,
@@ -284,7 +288,7 @@ def main():
         if validator is not None:
             if epoch % (2000 // num_itr_per_epoch) == 0:
                 print("Validating...")
-                val_mean_iou, val_res, val_str = validator.validate(mapsam)
+                val_mean_iou, val_res, val_str = validator.validate(model)
                 logger.info('\n' + val_str)
                 print(val_str)
                 if val_mean_iou > max_mean_iou:

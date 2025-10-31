@@ -28,17 +28,15 @@ class SemSegModelBase(nn.Module):
         self.mask_decoder = mask_decoder
         self.prompt_encoder = prompt_encoder
 
-    def save_dora_parameters(self) -> dict:
-        state_dict = self.state_dict()
+    def trainable_state_dict(self) -> dict:
         filtered_state_dict = {}
-        for key, value in state_dict.items():
-            if 'prompt_encoder' in key or 'mask_decoder' in key:
-                filtered_state_dict[key] = value
-            elif ('qkv' in key) and ('m_' in key or 'lora' in key):
-                    filtered_state_dict[key] = value
+        state_dict = self.state_dict()
+        for key, value in self.named_parameters():
+            if value.requires_grad:
+                filtered_state_dict[key] = state_dict[key]
         return filtered_state_dict
-
-    def load_dora_parameters(self, state_dict: dict) -> None:
+    
+    def load_trainable_state_dict(self, state_dict: dict) -> None:
         full_state_dict = self.state_dict()
         for key, value in state_dict.items():
             full_state_dict[key] = value

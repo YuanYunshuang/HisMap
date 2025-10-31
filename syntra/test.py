@@ -170,7 +170,7 @@ def main():
     assert os.path.isfile(args.checkpoint)
     ## Map model to be loaded to specified single GPU
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    model.load_dora_parameters(checkpoint["model"])
+    model.load_trainable_state_dict(checkpoint["model"])
 
     # %% test
     num_notions = {'railway': 1, 'vineyard': 1}

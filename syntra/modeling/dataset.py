@@ -375,80 +375,50 @@ class MapTransformTest:
             v2.ToDtype(torch.bool, scale=False),
         ])
 
-        self.pad_transforms = v2.Compose([
-            PadToTargetSize(image_size),
-        ])
+        # self.pad_transforms = v2.Compose([
+        #     PadToTargetSize(image_size),
+        # ])
+
+        self.resize_img = v2.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR)
+        self.resize_lbl = v2.Resize((image_size, image_size), interpolation=InterpolationMode.NEAREST)
+    
+    def resize(self, imgs, lbls):
+        """
+        Resize images and labels to target size. Supports either a single image/label
+        or lists of them.
+        Images use bilinear interpolation and labels use nearest.
+        """
+        def apply_one(i, l):
+            i = self.resize_img(i)
+            if l is not None:
+                l = self.resize_lbl(l.unsqueeze(0)).squeeze(0)
+                try:
+                    l = l.to(torch.bool)
+                except Exception:
+                    # fallback if returned type isn't a tensor
+                    pass
+            return i, l
+
+        if isinstance(imgs, list):
+            img_list = []
+            lbl_list = []
+            for i, ll in zip(imgs, lbls):
+                ii, ll = apply_one(i, ll)
+                img_list.append(ii)
+                lbl_list.append(ll)
+            return img_list, lbl_list
+        else:
+            return apply_one(imgs, lbls)
 
     def __call__(self, img, lbl=None):
         img = self.img_transforms(img)
         if lbl is not None:
             lbl = self.lbl_transforms(lbl)
-            img, lbl = self.pad_transforms(img, lbl)
+            img, lbl = self.resize(img, lbl)
             return img, lbl
         else:
-            img, lbl = self.pad_transforms(img, lbl)
+            img, lbl = self.resize(img, lbl)
             return img
-
-
-def get_dataloader(root_dir, batch_size=4, mode='train'):
-    dataset = MapDataset(root_dir)
-    dataloader = torch.utils.data.DataLoader(dataset,
-                                             batch_size=batch_size,
-                                             sampler=None,
-                                             num_workers=4,
-                                             shuffle=True,
-                                             collate_fn=dataset.collate_fn,
-                                             pin_memory=True,
-                                             drop_last=True)
-    return dataloader
-
-
-def generate_meta_info(data_root, merge_water=True):
-    cities = [x for x in os.listdir(data_root) if os.path.isdir(os.path.join(data_root, x))]
-    stats = {}
-    train_split = []
-    test_split = []
-    for city in cities:
-        lbl_path = os.path.join(data_root, city, "lbls")
-        file_list = sorted(os.listdir(lbl_path))
-
-        for f in file_list:
-            name = f"{city}.{f.split('.')[0]}"
-            lbl = cv2.imread(os.path.join(lbl_path, f), cv2.IMREAD_UNCHANGED)
-            if merge_water:
-                lbl[lbl==5] = 4
-            stat = {}
-            for i in range(5):
-                stat[i] = int(np.sum(lbl == i)) / lbl.size
-            stats[name] = stat
-
-            x, y = f.split(".")[0].split("_")[-2:]
-            if ((int(x) + int(y)) / 384) % 2 == 1:
-                train_split.append(name)
-            else:
-                test_split.append(name)
-
-    with open(os.path.join(data_root, "dinfo.json"), "w") as fh:
-        json.dump(stats, fh, indent=4)
-    # 50/50
-    with open(os.path.join(data_root, "train50.txt"), "w") as fh:
-        fh.write("\n".join(train_split))
-    with open(os.path.join(data_root, "test50.txt"), "w") as fh:
-        fh.write("\n".join(test_split))
-
-    # 75 / 25
-    total_file_num = len(train_split) + len(test_split)
-    goal_num = int(total_file_num * 0.75)
-    selected = np.random.choice(test_split, goal_num - len(train_split), replace=False)
-    train_split.extend(selected)
-    test_split = [x for x in test_split if x not in selected]
-    with open(os.path.join(data_root, "train75.txt"), "w") as fh:
-        fh.write("\n".join(train_split))
-    with open(os.path.join(data_root, "test25.txt"), "w") as fh:
-        fh.write("\n".join(test_split))
-
-    print(f"Found {len(stats)} samples.")
-    return stats
 
 
 if __name__ == '__main__':

@@ -10,3 +10,4 @@ imagecodecs
 PyYAML
 tqdm
 timm
+iopath

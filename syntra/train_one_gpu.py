@@ -8,16 +8,20 @@ freeze prompt image encoder
 import os
 import sys
 import logging
-
-join = os.path.join
-from tqdm import tqdm
-
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import monai
+import random
 import argparse
 from datetime import datetime
 import shutil
+from os.path import join
+from tqdm import tqdm
+
+    
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+import monai
+
 
 from syntra.modeling.dataset import get_dataset
 from syntra.modeling.validator import Validator
@@ -26,9 +30,6 @@ from syntra.utils.train_utils import adjust_learning_rate_cosine, adjust_learnin
 from syntra.utils.sampler import get_sampler
 from syntra.utils.debug_utils import *
 
-# set seeds
-torch.manual_seed(2025)
-torch.cuda.empty_cache()
 
 # torch.distributed.init_process_group(backend="gloo")
 
@@ -37,6 +38,13 @@ os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
 os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
 os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
 os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
+
+
+def set_seeds(seed: int = 123) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def add_pythonpath_to_sys_path():
@@ -106,6 +114,7 @@ def setup_parser():
 def main():
     args = setup_parser()
     run_id = datetime.now().strftime("%Y%m%d-%H%M")
+    set_seeds(1234)
     if args.disable_runid:
         model_save_path = join(args.output_dir, args.task_name)
     else:

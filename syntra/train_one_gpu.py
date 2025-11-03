@@ -89,7 +89,7 @@ def setup_parser():
     parser.add_argument("-bs", "--batch-size", type=int, default=16)
     parser.add_argument("-nw", "--num-workers", type=int, default=4)
     parser.add_argument("-a", "--accum-steps", type=int, default=4)
-    parser.add_argument("--train-prompt-encoder", action="store_true", default=False, help="Train prompt encoder parameters")
+    parser.add_argument("--freeze-prompt-encoder", action="store_true", default=False, help="Train prompt encoder parameters")
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
     parser.add_argument("--lr", type=float, default=1e-3, metavar="LR", help="learning rate (absolute lr)")
@@ -142,7 +142,7 @@ def main():
                 f"{sum(p.numel() for p in model.parameters()) / 1024**2:.2f} M")  
     logger.info(f"# trainable parameters: "
                 f"{sum(p.numel() for p in model.parameters() if p.requires_grad) / 1024**2:.2f} M")  
-    if not args.train_prompt_encoder:
+    if args.freeze_prompt_encoder:
         opt_params = list(model.image_encoder.parameters()) + list(
             model.mask_decoder.parameters()
         )

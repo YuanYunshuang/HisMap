@@ -56,7 +56,8 @@ class SMOLDataset(Dataset):
         if mode == "test":
             assert src_info_file is not None, "In test mode, src_info_file must be provided."
             assert src_cls is not None, "In test mode, src_cls must be provided."
-            self.fixed_cls = src_cls
+            
+        self.fixed_cls = src_cls
         self.datasets = os.listdir(self.data_root)
         # load samples
         self.label_ratios = {}

@@ -27,7 +27,8 @@ def get_dataset(dataset_name, **kwargs):
 class SMOLDataset(Dataset):
     INVALID_CLS = ['background', 'nonlabeled']
     def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
-                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None):
+                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None,
+                 src_info_file=None, src_cls=None, **kwargs):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -37,7 +38,7 @@ class SMOLDataset(Dataset):
         mode: str
             Indicates the mode in which the dataset is being used. Default is "train".
         info_file: str
-            Path to the txt file containing the dataset information.
+            Path to the json file containing the data sample information.
         fg_ratio: float, optional
             Foreground ratio threshold for source masks. Default is 0.1.
         pos_prob: float, optional
@@ -51,38 +52,63 @@ class SMOLDataset(Dataset):
         self.mode = mode
         self.fg_ratio = fg_ratio
         self.pos_prob = pos_prob
-
         
+        if mode == "test":
+            assert src_info_file is not None, "In test mode, src_info_file must be provided."
+            assert src_cls is not None, "In test mode, src_cls must be provided."
+            self.fixed_cls = src_cls
         self.datasets = os.listdir(self.data_root)
         # load samples
         self.label_ratios = {}
         self.label_colors = {}
         self.file_list = []
+        self.src_file_list = []
+        available_classes = set()
         for ds in self.datasets:
+            if not any([k in ds for k in filtering_keys]):
+                continue
             with open(os.path.join(self.data_root, ds, info_file)) as f:
-                lines = f.readlines()
-                self.file_list.extend([line.strip() for line in lines])
+                lines = list(json.load(f).keys())
+                self.file_list.extend(lines)
             with open(os.path.join(self.data_root, ds, f"{ds}.json")) as f:
                 self.label_ratios.update(json.load(f))
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
                 self.label_colors[ds] = json.load(f)
+                available_classes.update(set(self.label_colors[ds].keys()) - set(self.INVALID_CLS))
+            if src_info_file is not None:
+                with open(os.path.join(self.data_root, ds, src_info_file)) as f:
+                    src_lines = list(json.load(f).keys())
+                    self.src_file_list.extend(src_lines)
+        
+        if self.fixed_cls is not None:
+            assert self.fixed_cls in available_classes, \
+                f"Fixed source class {self.fixed_cls} is not in available classes {available_classes} of the current loaded dataset."
+
+        if len(self.src_file_list) == 0:
+            self.src_file_list = self.file_list.copy()
 
         if filtering_keys is not None:
             filtering_keys = filtering_keys.split(",")
             filtered_file_list = []
+            filtered_src_file_list = []
             for fname in self.file_list:
                 if any([k in fname for k in filtering_keys]):
                     filtered_file_list.append(fname)
+            for fname in self.src_file_list:
+                if any([k in fname for k in filtering_keys]):
+                    filtered_src_file_list.append(fname)
             self.file_list = filtered_file_list
+            self.src_file_list = filtered_src_file_list
 
         self.file_list = list(set(self.file_list))
+        self.src_file_list = list(set(self.src_file_list))
         self.transform = MapTransformTrain() if 'train' in mode or 'nshot' in mode else MapTransformTest()
         print(f"Number of {mode} images: {len(self.file_list)}")
         self.get_loading_list()
 
     def get_loading_list(self):
         loading_list_src = {}
-        for name in self.file_list:
+        for name in self.src_file_list:
             info = self.label_ratios[name]
             key = name.rsplit(".", 1)[0] # subdataset key (map sheet key)
             if key not in loading_list_src:
@@ -92,7 +118,11 @@ class SMOLDataset(Dataset):
                     continue
                 if self.fg_ratio < v < 0.9 :
                     loading_list_src[key][k].append(name)
-
+        if self.mode == "test":
+            file_list = [f for f in self.file_list if len(loading_list_src[f.rsplit(".", 1)[0]][self.fixed_cls]) > 0]
+            if len(self.file_list) != len(file_list):
+                print(f"Warning: {len(self.file_list) - len(file_list)} target images do not have available source images and will be removed for testing.")
+                self.file_list = file_list
         self.loading_list = loading_list_src
 
     def select_tgt_cls(self, tgt_full_name):
@@ -128,17 +158,13 @@ class SMOLDataset(Dataset):
 
         if self.mode == "train":
             selected_cls = self.select_tgt_cls(tgt_full_name) 
-            selected_colors = [self.label_colors[dataset][selected_cls] if selected_cls is not None else None]                 
         else:
-            # for test mode, use all notions
-            selected_colors = [v for k, v in self.label_colors[dataset].items() if k not in self.INVALID_CLS]
-            assert len(selected_colors) <= self.num_notions, \
-                f"During test, number of selected notions {len(selected_colors)} should be == {self.num_notions}."
-        
+            selected_cls = self.fixed_cls  
+        selected_colors = [self.label_colors[dataset][selected_cls] if selected_cls is not None else None]      
         available_src = self.loading_list[dataset][selected_cls]
         if len(available_src) == 0:
             print(f"Warning: No available source images for target image {tgt_full_name} and selected class {selected_cls}.")
-        src_full_names = np.random.choice(available_src, self.num_src, replace=len(available_src)<self.num_src).tolist()
+        src_full_names = np.random.choice(available_src, self.num_src, replace=len(available_src)<self.num_src).tolist()           
 
         # load images and labels
         imgs = []
@@ -208,7 +234,7 @@ class SMOLDataset(Dataset):
 class SynTraDataset(Dataset):
     INVALID_CLS = ['background', 'nonlabeled']
     def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
-                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None):
+                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None, **kwargs):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.

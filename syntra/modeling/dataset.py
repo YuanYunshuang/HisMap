@@ -65,7 +65,7 @@ class SMOLDataset(Dataset):
         self.src_file_list = []
         available_classes = set()
         for ds in self.datasets:
-            if not any([k in ds for k in filtering_keys]):
+            if filtering_keys is not None and not any([k in ds for k in filtering_keys]):
                 continue
             with open(os.path.join(self.data_root, ds, info_file)) as f:
                 lines = list(json.load(f).keys())

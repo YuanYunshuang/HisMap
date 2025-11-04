@@ -190,7 +190,7 @@ def main():
     elif args.dataset_name == 'smol':
         num_notions = 1
         fixed_src_cls = {
-            'hameln': ['water'], # 'forest', 'grass', 'settlement', 
+            'hameln': ['forest', 'grass', 'settlement', 'water'], # 'forest', 'grass', 'settlement', 
             'bayern': ['forest', 'grass', 'water'],
             'railway': ['railway'],
             'vineyard': ['vineyard']

@@ -92,7 +92,7 @@ def setup_parser():
     parser.add_argument("--freeze-prompt-encoder", action="store_true", default=False, help="Train prompt encoder parameters")
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
-    parser.add_argument("--lr", type=float, default=1e-3, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("--lr", type=float, default=5e-4, metavar="LR", help="learning rate (absolute lr)")
     parser.add_argument("--warmup-itrs", type=int, default=1000, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("--use-wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("--use-amp", action="store_true", default=False, help="use amp")

@@ -83,7 +83,7 @@ def setup_parser():
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     parser.add_argument("--sampler", type=str, default="uniform", help="sampler type: uniform or prob")
-    parser.add_argument("-dkw", "--data-keywords", type=str, default='hameln', help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
+    parser.add_argument("-dkw", "--data-keywords", type=str, default=None, help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=100000)

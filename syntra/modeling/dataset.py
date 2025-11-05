@@ -234,8 +234,8 @@ class SMOLDataset(Dataset):
 
 class SynTraDataset(Dataset):
     INVALID_CLS = ['background', 'nonlabeled']
-    def __init__(self, data_root, num_notions=1, num_src=1, mode="train", 
-                 info_file=None, fg_ratio=0.05, pos_prob=0.75, filtering_keys=None, **kwargs):
+    def __init__(self, data_root, info_file, num_notions=1, num_src=1, mode="train", 
+                 fg_ratio=0.05, pos_prob=0.75, filtering_keys=None, **kwargs):
         """
         Initializes an instance of the class with dataset information, loads file lists,
         and initializes transformations.
@@ -243,15 +243,16 @@ class SynTraDataset(Dataset):
         Parameters:
         data_root: str
             The root directory of the dataset containing all related files.
-        mode: str
-            Indicates the mode in which the dataset is being used. Default is "train".
         info_file: str
             Path to the json file containing the dataset information.
-        fix_src_lbl: bool, optional
-            Whether to fix source labels. Default is 0:not fixed.
-            Other options: 1: fixed to 1, 2: fixed to 2, 3: fixed to 3, 4: fixed to 4.
+        mode: str
+            Indicates the mode in which the dataset is being used. Default is "train".
         fg_ratio: float, optional
             Foreground ratio threshold for source masks. Default is 0.1.
+        pos_prob: float, optional
+            Probability of selecting a class that is present in both source and target images. Default is 0.75.
+        filtering_keys: str, optional
+            Comma-separated keys to filter the sub-datasets that contain the given keys. Default is None to select all.
         """
         self.data_root = data_root
         self.num_notions = num_notions
@@ -260,14 +261,18 @@ class SynTraDataset(Dataset):
         self.fg_ratio = fg_ratio
         self.pos_prob = pos_prob
 
-        if info_file is None:
-            info_file = f"paring_{mode}_intercls.json" 
         self.datasets = os.listdir(self.data_root)
         # load samples
         self.src_pool = {}
         self.label_ratios = {}
         self.label_colors = {}
+        filtering_keys = filtering_keys.split(",")
         for ds in self.datasets:
+            if filtering_keys is not None and not any([k in ds for k in filtering_keys]):
+                continue
+            if not os.path.isfile(os.path.join(self.data_root, ds, info_file)):
+                Warning(f"Info file {info_file} does not exist in dataset folder {ds}. Skip this dataset.")
+                continue
             with open(os.path.join(self.data_root, ds, info_file)) as f:
                 self.src_pool.update(json.load(f))
             with open(os.path.join(self.data_root, ds, f"{ds}.json")) as f:
@@ -275,15 +280,7 @@ class SynTraDataset(Dataset):
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
                 self.label_colors[ds] = json.load(f)
 
-        if filtering_keys is not None:
-            filtering_keys = filtering_keys.split(",")
-            filtered_file_list = []
-            for fname in self.src_pool.keys():
-                if any([k in fname for k in filtering_keys]):
-                    filtered_file_list.append(fname)
-            self.file_list = filtered_file_list
-        else:
-            self.file_list = list(self.src_pool.keys())
+        self.file_list = list(self.src_pool.keys())
 
         self.transform = MapTransformTrain() if 'train' in mode or 'nshot' in mode else MapTransformTest()
         print(f"Number of {mode} images: {len(self.file_list)}")
@@ -465,8 +462,8 @@ class MapTransformTrain:
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            v2.ColorJitter(color_jitter, color_jitter, color_jitter),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.25, 0.25, 0.25]),
+            # v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
         self.lbl_transforms = v2.Compose([

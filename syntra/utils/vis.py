@@ -194,6 +194,9 @@ def vis_train(img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, iter_num, size_per_i
     ncol = T * 2 + 1
     _, axs = plt.subplots(nrows=bs, ncols=ncol, figsize=(ncol*size_per_img, bs*size_per_img))
 
+    # unnormalize images
+    img_src = img_src * 0.25 + 0.5
+    img_tgt = img_tgt * 0.25 + 0.5
     img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy()
     img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy()
     lbl_src = lbl_src.detach().cpu().numpy()

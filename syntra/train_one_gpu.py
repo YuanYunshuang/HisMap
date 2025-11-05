@@ -83,6 +83,7 @@ def setup_parser():
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.05)
     parser.add_argument("-val", "--validation-data", type=str, default=None)
     parser.add_argument("--sampler", type=str, default="uniform", help="sampler type: uniform or prob")
+    parser.add_argument("-dkw", "--data-keywords", type=str, default='hameln', help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
     # train
     parser.add_argument("-e", "--num-epochs", type=int, default=200)
     parser.add_argument("-itr", "--max-iterations", type=int, default=100000)
@@ -92,14 +93,14 @@ def setup_parser():
     parser.add_argument("--freeze-prompt-encoder", action="store_true", default=False, help="Train prompt encoder parameters")
     # Optimizer parameters
     parser.add_argument("--weight-decay", type=float, default=0.01, help="weight decay (default: 0.01)")
-    parser.add_argument("--lr", type=float, default=5e-4, metavar="LR", help="learning rate (absolute lr)")
+    parser.add_argument("--lr", type=float, default=1e-3, metavar="LR", help="learning rate (absolute lr)")
     parser.add_argument("--warmup-itrs", type=int, default=1000, metavar="warmup epochs", help="total number of warmup epochs")
     parser.add_argument("--use-wandb", type=bool, default=False, help="use wandb to monitor training")
     parser.add_argument("--use-amp", action="store_true", default=False, help="use amp")
     parser.add_argument("--resume", type=str, default="", help="Resuming training from checkpoint")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--plot-loss", action="store_true", default=False)
-    parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--vis-freq", type=int, default=None, help="visualization frequency (in iterations)")
     # parser.add_argument("--train-patch-emb", action="store_true", default=False, help="Train patch embedding parameters")
     parser.add_argument("--lr-scheduler", type=str, default="exp", help="learning rate scheduler: cosine, exp or none")
     parser.add_argument("--from-scratch", action="store_true", default=False)
@@ -162,7 +163,8 @@ def main():
                                num_src=args.num_src,
                                mode="train",
                                info_file=args.data_info,
-                               fg_ratio=args.foreground_ratio)
+                               fg_ratio=args.foreground_ratio,
+                               filtering_keys=args.data_keywords)
     logger.info(f"# training samples: {len(train_dataset)}")
     sampler, batch_sampler = get_sampler(train_dataset, batch_size=args.batch_size, sampler_name=args.sampler) 
     if batch_sampler is None:
@@ -220,10 +222,9 @@ def main():
             ## Map model to be loaded to specified single GPU
             checkpoint = torch.load(args.resume, map_location=device)
             model.load_trainable_state_dict(checkpoint["model"])
-            if not "fewshot" in args.data_mode:
-                optimizer.load_state_dict(checkpoint["optimizer"])
-                start_epoch = checkpoint["epoch"] + 1
-                iter_num = len(train_dataloader) * checkpoint["epoch"] + 1
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            start_epoch = checkpoint["epoch"] + 1
+            iter_num = len(train_dataloader) * checkpoint["epoch"] + 1
     if args.use_amp:
         scaler = torch.cuda.amp.GradScaler()
 
@@ -275,9 +276,9 @@ def main():
                 logger.info({'Epoch/Step': f'{epoch}/{step + 1}', 'ITR': iter_num, 'LR': f'{cur_lr:e}', 'Loss': f'{epoch_loss / (step + 1):.6f}'})
             iter_num += 1
 
-        if args.debug:
-            from syntra.utils.vis import vis_train
-            vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
+            if args.vis_freq is not None and iter_num % args.vis_freq == 0:
+                from syntra.utils.vis import vis_train
+                vis_train(img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, iter_num)
         epoch_loss /= max(step, 1)
         losses.append(epoch_loss)
         lrs.append(cur_lr)
@@ -291,7 +292,7 @@ def main():
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
         }
-        torch.save(checkpoint, join(model_save_path, "mapsam_model_latest.pth"))
+        torch.save(checkpoint, join(model_save_path, "model_latest.pth"))
         ## save the best model
         save_best_flag = False
         if validator is not None:
@@ -313,7 +314,7 @@ def main():
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }
-            torch.save(checkpoint, join(model_save_path, "mapsam_model_best.pth"))
+            torch.save(checkpoint, join(model_save_path, "model_best.pth"))
 
         ## save the intermediate model
         if epoch % 50 == 0:
@@ -322,10 +323,10 @@ def main():
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
             }
-            torch.save(checkpoint, join(model_save_path, f"mapsam_model_ep{epoch}.pth"))
+            torch.save(checkpoint, join(model_save_path, f"model_ep{epoch}.pth"))
 
         # save loss
-        with open(join(model_save_path, "mapsam_loss.txt"), "w") as f:
+        with open(join(model_save_path, "loss.txt"), "w") as f:
             for x, y in zip(losses, lrs):
                 f.write(f'{y:.6f}, {x:.6f}\n')
                 

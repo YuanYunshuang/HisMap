@@ -180,8 +180,9 @@ def main():
     # %% test
     eval_results = []
     if args.dataset_name == 'syntra':
-        num_notions = {'railway': 1, 'vineyard': 1}
-        num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
+        # num_notions = {'railway': 1, 'vineyard': 1}
+        # num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
+        num_notions = {'medical': 3}
         fixed_src_cls = None
         for kw, n in num_notions.items():
             args.keywords = kw

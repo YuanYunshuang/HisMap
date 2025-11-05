@@ -63,7 +63,7 @@ def setup_parser():
     parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
     parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
     # dataset
-    parser.add_argument("-kw", "--keywords", type=str, default='hameln', help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
+    parser.add_argument("-kw", "--keywords", type=str, default=None, help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
     parser.add_argument("--dataset-name", type=str, default='syntra')
     parser.add_argument("--data-info", type=str, default="pairing_train_100shot_test_intercls.json")
     parser.add_argument("--src-data-info", type=str, default="pairing_train_100shot_train_100shot_intercls.json")

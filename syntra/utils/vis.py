@@ -24,6 +24,16 @@ color_map = {
     'siegfried.vineyard': [
         (139, 69, 19),    # 'vineyard': Saddle Brown
     ],
+    'oem': [
+        (210, 180, 140),
+        (244, 164, 96),
+        ( 50, 128,  50),
+        (128,  64, 128),
+        (  0, 255, 128),
+        ( 30, 144, 255),
+        (255, 255,   0),
+        (255,   0, 128),
+    ]
 }
 
 
@@ -49,6 +59,8 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
         colors = color_map['siegfried.railway']
     elif 'vineyard' in tgt_name:
         colors = color_map['siegfried.vineyard']
+    elif 'oem' in tgt_name:
+        colors = color_map['oem']
     else:
         # Default to random colors if no specific mapping found
         colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]
@@ -77,9 +89,9 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, r
         align_corners=False,
     ).view(B, T, N, H, W)
 
-    img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy() * 0.5 + 0.5
+    img_src = img_src.detach().permute(0, 1, 3, 4, 2).cpu().numpy() * 0.25 + 0.5
     img_src = (img_src * 255).astype(np.uint8)
-    img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.5 + 0.5
+    img_tgt = img_tgt.detach().permute(0, 2, 3, 1).cpu().numpy() * 0.25 + 0.5
     img_tgt = (img_tgt * 255).astype(np.uint8)
     lbl_src = lbl_src.detach().cpu().numpy()
     lbl_tgt = lbl_tgt.detach().cpu().numpy()

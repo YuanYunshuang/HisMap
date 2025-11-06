@@ -245,6 +245,57 @@ def dump_label_colors_landcover(output_folder):
     with open(os.path.join(output_folder, "color_map.json"), 'w') as f:
         json.dump(color_map, f, indent=4)
 
+
+def select_from_oem_landcover(output_path, num_per_city=20):
+    """
+    Select a few images from each city in the OpenEarthMap landcover dataset.
+    """
+    cities = [x for x in os.listdir(os.path.join(output_path)) if x.startswith('oem.landcover.')]
+    selected_output_path = os.path.join(output_path, 'oem.landcover_selection')
+    os.makedirs(os.path.join(selected_output_path, 'imgs'), exist_ok=True)
+    os.makedirs(os.path.join(selected_output_path, 'lbls'), exist_ok=True)
+    data_info = {}
+
+    for city in cities:
+        with open(os.path.join(output_path, city, 'oem.fewshot.json'), 'r') as f:
+            city_data_info = json.load(f)
+        labled_files = [x for x in os.listdir(os.path.join(output_path, city, 'lbls'))]
+        labled_files.sort()
+        img_files = [os.path.join(output_path, city, 'imgs', x) for x in labled_files]
+        lbl_files = [os.path.join(output_path, city, 'lbls', x) for x in labled_files]
+        if len(img_files) == 0:
+            print(f'Warning: city {city} has no images. Skipping.')
+            continue
+        # randomly select num_per_city images
+        selection_inds = np.random.choice(len(img_files), min(num_per_city, len(img_files)), replace=False).tolist()
+        selected_imgs = [img_files[i] for i in selection_inds]
+        selected_lbls = [lbl_files[i] for i in selection_inds]
+        for img_file, lbl_file in zip(selected_imgs, selected_lbls):
+            filename = os.path.basename(img_file)
+            data_info['oem.landcover_selection.' + filename.replace('.png', '')] = city_data_info['oem.fewshot.' + filename.replace('.png', '')]
+            # copy image and label 
+            os.system(f'cp {img_file} {os.path.join(selected_output_path, "imgs", filename)}')
+            os.system(f'cp {lbl_file} {os.path.join(selected_output_path, "lbls", filename)}')
+    with open(os.path.join(selected_output_path, "oem.landcover_selection.json"), 'w') as f:
+        json.dump(data_info, f, indent=4)
+
+
+def split_selection(selected_output_path):
+    with open(os.path.join(selected_output_path, 'oem.landcover_selection.json'), 'r') as f:
+        data_info = json.load(f)
+    filenames = list(data_info.keys())
+    np.random.shuffle(filenames)
+    num_samples = len(filenames)
+    train_files = filenames[:num_samples * 4 // 10]
+    val_files = filenames[num_samples * 4 // 10:num_samples * 6 // 10]
+    test_files = filenames[num_samples * 6 // 10:]
+    for split, split_files in zip(['train', 'val', 'test'], [train_files, val_files, test_files]):
+        with open(os.path.join(selected_output_path, f'{split}_samples.txt'), 'w') as f:
+            for sample in split_files:
+                f.write(sample + '\n')   
+
+    
+
 if __name__ == "__main__":
     # input_path = '/home/yuan/data/OpenEarthMap_fewshot'
     # output_path = '/home/yuan/data/syntra/remote_sensing'
@@ -252,11 +303,23 @@ if __name__ == "__main__":
     # dump_label_colors_fewshot(os.path.join(output_path, 'oem.fewshot'))
     # generate_data_info_file(os.path.join(output_path, 'oem.fewshot'))
 
-    input_path = '/home/yuan/data/OpenEarthMap/OpenEarthMap_wo_xBD'
-    output_path = '/home/yuan/data/syntra/remote_sensing'
+    # input_path = '/home/yuan/data/OpenEarthMap/OpenEarthMap_wo_xBD'
+    # output_path = '/home/yuan/data/syntra/remote_sensing'
     # convert_landcover(input_path, output_path)
-    for city_folder in os.listdir(os.path.join(output_path)):
-        if 'oem.landcover' not in city_folder:
-            continue
-        dump_label_colors_landcover(os.path.join(output_path, city_folder))
-        generate_data_info_file(os.path.join(output_path, city_folder))
+    # for city_folder in os.listdir(os.path.join(output_path)):
+    #     if 'oem.landcover' not in city_folder:
+    #         continue
+    #     dump_label_colors_landcover(os.path.join(output_path, city_folder))
+    #     generate_data_info_file(os.path.join(output_path, city_folder))
+
+    # select_from_oem_landcover('/home/yuan/data/syntra/remote_sensing', num_per_city=50)
+    # split selected data into train/val/test=4:2:4
+    # selected_output_path = '/home/yuan/data/syntra/remote_sensing/oem.landcover_selection'
+    # split_selection(selected_output_path)
+
+    ids = list(oem_landcover_cls_id_to_syntra_id.values())
+    colors = np.zeros((len(ids), 3), dtype=np.uint8)
+    for i, cls_id in enumerate(ids):
+        colors[i] = semantic_colors[[k for k, v in semantic_ids.items() if v == cls_id][0]]
+    
+    print(colors)

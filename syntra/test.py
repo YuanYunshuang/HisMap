@@ -38,16 +38,9 @@ os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
 
 
 def setup_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-d",
-        "--root-dir",
-        type=str,
-        default="/home/yuan/data/HisMap/SMOL_syntra",
-        help="path to training dataset; two subfolders: lbls and imgs",
-    )
-
     cur_path = os.path.abspath(os.path.dirname(__file__))
+    parser = argparse.ArgumentParser()
+    
     parser.add_argument("-w", "--checkpoint", type=str, default=f"syntra/logs/try1/mapsam_model_latest.pth")
     parser.add_argument("-o","--output_dir", type=str)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
@@ -63,7 +56,8 @@ def setup_parser():
     parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
     parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
     # dataset
-    parser.add_argument("-kw", "--keywords", type=str, default=None, help='dataset key words for filtering, e.g., railway, vineyard, bayern, hameln')
+    parser.add_argument("-d", "--root-dir", type=str, required=True, help="path to training dataset; two subfolders: lbls and imgs")
+    parser.add_argument("-dkw", "--data-keywords", type=str, default=None, help='dataset key words for filtering')
     parser.add_argument("--dataset-name", type=str, default='syntra')
     parser.add_argument("--data-info", type=str, default="pairing_train_100shot_test_intercls.json")
     parser.add_argument("--src-data-info", type=str, default="pairing_train_100shot_train_100shot_intercls.json")
@@ -88,7 +82,7 @@ def single_test(num_notions, fixed_src_cls, args, device, mapsam, seg_loss, ce_l
                                num_notions=num_notions,
                                num_src=args.num_src,
                                fg_ratio=args.foreground_ratio,
-                               filtering_keys=args.keywords,
+                               filtering_keys=args.data_keywords,
                                mode="test",
                                src_cls=fixed_src_cls,)
     num_samples = len(test_dataset)
@@ -182,7 +176,8 @@ def main():
     if args.dataset_name == 'syntra':
         # num_notions = {'railway': 1, 'vineyard': 1}
         # num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
-        num_notions = {'medical': 3}
+        # num_notions = {'medical': 3}
+        num_notions = {'landcover_selection': 8}
         fixed_src_cls = None
         for kw, n in num_notions.items():
             args.keywords = kw

@@ -261,14 +261,14 @@ class SynTraDataset(Dataset):
         self.fg_ratio = fg_ratio
         self.pos_prob = pos_prob
 
-        self.datasets = os.listdir(self.data_root)
+        datasets = os.listdir(self.data_root)
         # load samples
         self.src_pool = {}
         self.label_ratios = {}
         self.label_colors = {}
-        filtering_keys = filtering_keys.split(",")
-        for ds in self.datasets:
-            if filtering_keys is not None and not any([k in ds for k in filtering_keys]):
+        
+        for ds in datasets:
+            if filtering_keys is not None and not any([k in ds for k in filtering_keys.split(",")]):
                 continue
             if not os.path.isfile(os.path.join(self.data_root, ds, info_file)):
                 Warning(f"Info file {info_file} does not exist in dataset folder {ds}. Skip this dataset.")
@@ -572,8 +572,8 @@ class MapTransformTest:
         self.img_transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            v2.ColorJitter(color_jitter, color_jitter, color_jitter),
+            v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.25, 0.25, 0.25]),
+            # v2.ColorJitter(color_jitter, color_jitter, color_jitter),
         ])
 
         self.lbl_transforms = v2.Compose([

@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 from PIL import Image
 
@@ -76,5 +77,85 @@ kitti_color_palette.extend([0,] * (255*3 - len(kitti_color_palette)))  # pad the
 kitti_color_palette.extend([255, 255, 255])  # nonlabeled color
 
 
+def encode_label(lbl_pil):
+    lbl_np = np.array(lbl_pil)
+    syntra_lbl_np = np.zeros_like(lbl_np, dtype=np.uint8)
+    for class_name, src_id in label_id_map.items():
+        if src_id == -1:
+            continue
+        syntra_lbl_np[lbl_np == src_id] = list(label_id_map.keys()).index(class_name) + 1
+    syntra_lbl_pil = Image.fromarray(syntra_lbl_np, mode='P')
+    syntra_lbl_pil.putpalette(kitti_color_palette)
+    return syntra_lbl_pil
+
+
 def convert(input_path, output_path):
-    pass
+    split_to_path = {
+        'train': os.path.join(input_path, 'training'),
+        'test': os.path.join(input_path, 'testing')
+    }
+    os.makedirs(os.path.join(output_path, 'imgs'), exist_ok=True)
+    os.makedirs(os.path.join(output_path, 'lbls'), exist_ok=True)
+    data_info = {}
+
+    for split, split_path in split_to_path.items():
+        img_dir = os.path.join(split_path, 'image_2')
+        lbl_dir = os.path.join(split_path, 'semantic')
+
+        cur_samples = []
+        for filename in os.listdir(img_dir):
+            if filename.endswith('_11.png'):
+                continue
+            file_id = filename.replace('.png', '')
+            img_file = os.path.join(img_dir, filename)
+            lbl_file = os.path.join(lbl_dir, filename)
+
+            if not os.path.exists(lbl_file):
+                continue
+
+            print(f"Processing {img_file} ...")
+            img_pil = Image.open(img_file).convert("RGB")
+            lbl_pil = Image.open(lbl_file).convert("L")
+            lbl_pil = encode_label(lbl_pil)
+
+            # crop to 3 images
+            h, w = img_pil.height, img_pil.width
+            wc = w // 3
+            for i in range(3):
+                img_crop = img_pil.crop((i * wc, 0, (i + 1) * wc, h))
+                lbl_crop = lbl_pil.crop((i * wc, 0, (i + 1) * wc, h))
+                crop_file_id = f"{file_id}_{i}"
+                img_crop.save(os.path.join(output_path, 'imgs', crop_file_id + '.png'))
+                lbl_crop.save(os.path.join(output_path, 'lbls', crop_file_id + '.png'))
+                cur_samples.append(f"kitti.{crop_file_id}")
+
+                # Process label for data info
+                lbl_np = np.array(lbl_crop)
+                total_pixels = lbl_np.size
+                class_ratios = {}
+                for i, class_name in enumerate(label_id_map.keys()):
+                    if label_id_map[class_name] == -1:
+                        continue
+                    class_pixels = np.sum(lbl_np == (i + 1))
+                    class_ratios[class_name] = class_pixels / total_pixels
+                data_info[f"kitti.{crop_file_id}"] = class_ratios
+        
+        # save sample list
+        with open(os.path.join(output_path, f'{split}_samples.txt'), 'w') as f:
+            for sample in cur_samples:
+                f.write(sample + '\n')
+    # save data info
+    with open(os.path.join(output_path, "kitti.json"), 'w') as f:
+        json.dump(data_info, f, indent=4)
+
+
+def save_label_colors(output_folder):
+    """Dump the label colors to a json file."""
+    with open(os.path.join(output_folder, "color_map.json"), 'w') as f:
+        json.dump(color_map, f, indent=4)
+
+if __name__ == "__main__":
+    input_path = '/koko/datasets/kitti/data_scene_flow'
+    output_path = '/home/yuan/data/syntra/autonomous_driving/kitti'
+    # convert(input_path, output_path)
+    save_label_colors(output_path)

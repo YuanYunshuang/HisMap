@@ -366,7 +366,7 @@ class SynTraDataset(Dataset):
             selected_color_inds = [palette.index(color) if color is not None else None for color in selected_colors]
             assert 0 < len(selected_color_inds) <= self.num_notions, \
                 f"Number of selected notions {len(selected_color_inds)} should be > 0 and < {self.num_notions}."
-            multi_notion_lbl = np.zeros(lbl.size + (self.num_notions,), dtype=bool)
+            multi_notion_lbl = np.zeros((lbl.size[1], lbl.size[0], self.num_notions,), dtype=bool)
             lbl = np.array(lbl.convert("P"))
             for i, color_idx in enumerate(selected_color_inds):
                 if color_idx is not None:

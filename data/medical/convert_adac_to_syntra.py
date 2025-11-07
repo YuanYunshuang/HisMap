@@ -2,15 +2,13 @@
 import os
 from glob import glob
 import random
-import time
 import re
-import argparse
 import nibabel as nib
-import pandas as pd
-from medpy.metric.binary import hd, dc
 import numpy as np
 from PIL import Image
 import json
+
+from .utils import med_img_to_rgb_pil_image
 
 
 semantic_colors = {
@@ -86,56 +84,6 @@ def adac_label_to_syntra_label(lbl):
     return pil_lbl
 
 
-def adac_img_to_rgb_pil_image(img):
-    """
-    Convert ADAC grayscale image to RGB image. Syntra model takes 3-channel images as input, 
-    with each channel being 8 bits. ADAC images are single-channel images with the maximum 
-    pixel value larger than 255. To keep the accuracy of the original ADAC images, we encode 
-    the pixel values into the three RGB 8-bit channels.
-
-    Parameters
-    ----------
-    img: np.array
-        Grayscale image array. Shape (H, W) 
-
-    Returns
-    -------
-    pil_img: PIL.Image
-        RGB image.
-    """
-    # encode pixel value to 3 8-bit channels
-    v = img.astype(np.uint32)
-    if (v.max() >= (1 << 24)) or (v.min() < 0):
-        raise ValueError("Values must be in [0, 2^24-1] for 3x8-bit RGB lossless packing.")
-    r = (v & 0xFF).astype(np.uint8)
-    g = ((v >> 8) & 0xFF).astype(np.uint8)
-    b = ((v >> 16) & 0xFF).astype(np.uint8)
-    rgb_array = np.stack([r, g, b], axis=-1)
-    pil_img = Image.fromarray(rgb_array, mode='RGB')
-    return pil_img
-
-
-def rgb_img_to_adac_img(pil_img):
-    """
-    Convert RGB image to ADAC grayscale image.
-    Parameters
-    ----------
-    pil_img: PIL.Image
-        RGB image.
-
-    Returns
-    -------
-    img: np.array
-        Grayscale image array. Shape (H, W) with min 0 and max 2**24-1
-    """
-    rgb_array = np.array(pil_img)
-    r = rgb_array[..., 0].astype(np.uint32)
-    g = rgb_array[..., 1].astype(np.uint32)
-    b = rgb_array[..., 2].astype(np.uint32)
-    img = r + (g << 8) + (b << 16)
-    return img
-
-
 def convert(input_folder, output_folder, sample_list_file):
     os.makedirs(os.path.join(output_folder, 'imgs'), exist_ok=True)
     os.makedirs(os.path.join(output_folder, 'lbls'), exist_ok=True)
@@ -148,7 +96,7 @@ def convert(input_folder, output_folder, sample_list_file):
             lbls, _, _ = load_nii(nii_path.replace('.nii', '_gt.nii'))
             for i, (img, lbl) in enumerate(zip(imgs.transpose(2,0,1), lbls.transpose(2,0,1))):
                 filename = f'{patient}_frame{frame_num:02d}_slice{i:03d}'
-                img_pil = adac_img_to_rgb_pil_image(img)
+                img_pil = med_img_to_rgb_pil_image(img)
                 img_pil.save(os.path.join(output_folder, 'imgs', filename + '.png'))
                 lbl_pil = adac_label_to_syntra_label(lbl)
                 lbl_pil.save(os.path.join(output_folder, 'lbls', filename + '.png'))

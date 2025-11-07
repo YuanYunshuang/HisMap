@@ -177,7 +177,9 @@ def main():
         # num_notions = {'railway': 1, 'vineyard': 1}
         # num_notions = {'hameln': 4, 'bayern': 3, 'railway': 1, 'vineyard': 1}
         # num_notions = {'medical': 3}
-        num_notions = {'landcover_selection': 8}
+        # num_notions = {'landcover_selection': 8}
+        # num_notions = {'chaos': 4}
+        num_notions = {'trees': 11}
         fixed_src_cls = None
         for kw, n in num_notions.items():
             args.keywords = kw

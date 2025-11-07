@@ -33,8 +33,41 @@ color_map = {
         ( 30, 144, 255),
         (255, 255,   0),
         (255,   0, 128),
+    ],
+    'chaos':
+    [
+        (255, 128, 128),  # liver, red
+        (128, 255, 128),  # right kidney green
+        (64, 64, 255),    # left kidney blue
+        (255, 255, 64),   # spleen yellow
     ]
 }
+
+
+def rgb_img_to_gray_med_img(rgb_array, normalize=True, to_uint8=True):
+    """
+    Convert RGB image to medical grayscale image.
+    Parameters
+    ----------
+    rgb_array: np.array
+
+    Returns
+    -------
+    img: np.array
+        Grayscale image array. Shape (H, W) with min 0 and max 2**24-1
+    """
+    r = rgb_array[..., 0].astype(np.uint32)
+    g = rgb_array[..., 1].astype(np.uint32)
+    b = rgb_array[..., 2].astype(np.uint32)
+    img = r + (g << 8) + (b << 16)
+    img = img.astype(np.float32)
+    if normalize:
+        img = (img - img.min()) / (img.max() - img.min()) 
+    if to_uint8:
+        img = (img * 255).astype(np.uint8)
+    # one channel to three channels for vis
+    img = np.stack([img, img, img], axis=-1)
+    return img
 
 
 def overlay_masks_on_image(image, tgt_name, alpha=0.5):    
@@ -61,6 +94,9 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
         colors = color_map['siegfried.vineyard']
     elif 'oem' in tgt_name:
         colors = color_map['oem']
+    elif 'chaos' in tgt_name:
+        colors = color_map['chaos']
+        overlaid_image = rgb_img_to_gray_med_img(overlaid_image)
     else:
         # Default to random colors if no specific mapping found
         colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]
@@ -101,11 +137,16 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, r
         midbar = np.zeros_like(img_tgt[0, :, :10]) + 128
         row1, row2 = [], []
         for t in range(T):
+            if 'chaos' in names[i]:
+                # convert to gray medical image
+                img_src[i, t] = rgb_img_to_gray_med_img(img_src[i, t])
             row1.append(img_src[i, t])
             row1.append(midbar)
             overlayed_img = overlay_masks_on_image(img_src[i, t], names[i], alpha=lbl_src[i, t] * 0.5)
             row2.append(overlayed_img)
             row2.append(midbar)
+        if 'chaos' in names[i]:
+            img_tgt[i] = rgb_img_to_gray_med_img(img_tgt[i])
         row1.append(img_tgt[i])
         row1.append(midbar)
         overlayed_tgt_img = overlay_masks_on_image(img_tgt[i], names[i], alpha=lbl_tgt[i] * 0.5)

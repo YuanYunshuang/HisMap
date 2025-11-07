@@ -1,6 +1,7 @@
 import os
 
 from PIL import Image
+from tifffile import imread
 import torch
 import numpy as np
 import json
@@ -266,6 +267,7 @@ class SynTraDataset(Dataset):
         self.src_pool = {}
         self.label_ratios = {}
         self.label_colors = {}
+        self.meta_info = {}
         
         for ds in datasets:
             if filtering_keys is not None and not any([k in ds for k in filtering_keys.split(",")]):
@@ -279,6 +281,9 @@ class SynTraDataset(Dataset):
                 self.label_ratios.update(json.load(f))
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
                 self.label_colors[ds] = json.load(f)
+            if os.path.isfile(os.path.join(self.data_root, ds, "meta_info.json")):
+                with open(os.path.join(self.data_root, ds, "meta_info.json")) as f:
+                    self.meta_info[ds] = json.load(f)
 
         self.file_list = list(self.src_pool.keys())
 
@@ -334,6 +339,23 @@ class SynTraDataset(Dataset):
             sorted_indices = np.argsort(src_dists)
             src_full_names = [src_full_names[i] for i in sorted_indices[:self.num_src]]
         return src_full_names
+    
+    def _load_image_label(self, full_name):
+        ds, img_name = full_name.rsplit(".", 1)
+        meta = self.meta_info.get(ds, None)
+        img_ext = meta.get("image_format", "png") if meta is not None else "png"
+        lbl_ext = meta.get("label_format", "png") if meta is not None else "png"
+        if img_ext == 'tiff' or img_ext == 'tif':
+            img = imread(os.path.join(self.data_root, ds, 'imgs', img_name + f'.{img_ext}'))
+        else:
+            img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + f'.{img_ext}'))
+            img = np.array(img)
+        if img.ndim == 2:
+            img = img[..., np.newaxis].repeat(3, axis=-1)
+        
+        lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + f'.{lbl_ext}'))
+        return img, lbl
+
 
     def __len__(self):
         return len(self.file_list)
@@ -357,9 +379,7 @@ class SynTraDataset(Dataset):
         lbls = []
         for img_full_name in [tgt_full_name] + src_full_names:
             ds, img_name = img_full_name.rsplit(".", 1)
-            img = Image.open(os.path.join(self.data_root, ds, 'imgs', img_name + '.png'))
-            img = np.array(img)
-            lbl = Image.open(os.path.join(self.data_root, ds, 'lbls', img_name + '.png'))
+            img, lbl = self._load_image_label(img_full_name)
             # get selected color idx
             palette = lbl.getpalette()
             palette = np.array(palette).reshape(-1, 3).tolist()

@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import monai
+from hydra import compose, initialize_config_module
 
 
 from syntra.modeling.dataset import get_dataset
@@ -54,21 +55,15 @@ def add_pythonpath_to_sys_path():
 
 
 
-def setup_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-d",
-        "--root-dir",
-        type=str,
-        default="/home/yuan/data/HisMap/syntra384",
-        help="path to training dataset; two subfolders: lbls and imgs",
-    )
-
+def parse_args():
     cur_path = os.path.abspath(os.path.dirname(__file__))
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("--config", type=str, required=True, help="path to config file")
     # common parameters
     parser.add_argument("-t", "--task-name", type=str, default="default", help="task name")
     parser.add_argument("-w", "--checkpoint", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
-    parser.add_argument("-o","--output-dir", type=str, default=f"{cur_path}/logs")
+    parser.add_argument("-o", "--output-dir", type=str, default=f"{cur_path}/logs")
     # model
     parser.add_argument("-r", "--dora-rank", type=int, default=16)
     parser.add_argument("-mn", "--model-name", type=str, default="smol", help="model name: unet or syntra")
@@ -76,6 +71,7 @@ def setup_parser():
     parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
     parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
     # dataset
+    parser.add_argument("-d", "--root-dir", type=str, default=None, help="path to training datasets")
     parser.add_argument("--dataset-name", type=str, default="syntra", help="dataset name: smol or syntra")
     parser.add_argument("--data-mode", type=str, default="nshot100", help="sample list file (.txt).")
     parser.add_argument("--data-info", type=str, help="data info file (.json)")
@@ -108,12 +104,21 @@ def setup_parser():
     parser.add_argument("--save-dora-only", type=bool, default=True)
     args = parser.parse_args()
 
+    initialize_config_module(config_module="syntra.configs", version_base=None)
+    cfg = compose(config_name=args.config)
+
+    # Override args with cfg arguments
+    for key, value in cfg.items():
+        if hasattr(args, key):
+            setattr(args, key, value)
+    
+
     return args
 
 
 
 def main():
-    args = setup_parser()
+    args = parse_args()
     run_id = datetime.now().strftime("%Y%m%d-%H%M")
     set_seeds(1234)
     if args.disable_runid:

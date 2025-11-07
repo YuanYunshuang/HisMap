@@ -40,6 +40,19 @@ color_map = {
         (128, 255, 128),  # right kidney green
         (64, 64, 255),    # left kidney blue
         (255, 255, 64),   # spleen yellow
+    ],
+    'trees': = [
+        (132, 74, 201),
+        (14, 191, 102),
+        (222, 57,  63),
+        (88, 208, 234),
+        (247, 158, 31),
+        (69, 132, 240),
+        (185, 92,  38),
+        (41, 173,  19),
+        (236, 57, 174),
+        (123, 123,123),
+        (21, 96,  150),       
     ]
 }
 
@@ -97,6 +110,8 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
     elif 'chaos' in tgt_name:
         colors = color_map['chaos']
         overlaid_image = rgb_img_to_gray_med_img(overlaid_image)
+    elif 'trees' in tgt_name:
+        colors = color_map['trees']
     else:
         # Default to random colors if no specific mapping found
         colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]

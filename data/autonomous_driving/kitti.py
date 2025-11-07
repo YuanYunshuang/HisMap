@@ -77,3 +77,4 @@ kitti_color_palette.extend([255, 255, 255])  # nonlabeled color
 
 
 def convert(input_path, output_path):
+    pass

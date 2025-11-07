@@ -41,7 +41,7 @@ color_map = {
         (64, 64, 255),    # left kidney blue
         (255, 255, 64),   # spleen yellow
     ],
-    'trees': = [
+    'trees': [
         (132, 74, 201),
         (14, 191, 102),
         (222, 57,  63),

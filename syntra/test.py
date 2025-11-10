@@ -122,7 +122,8 @@ def single_test(num_notions, fixed_src_cls, args, device, model, seg_loss, ce_lo
         # pbar.set_postfix({'Progress': f'0/{num_samples}', 'Loss': f'{0:.6f}',
         #                   'IoU': f'{0:.3f}', 'Precision': f'{0:.3f}', 'Recall': f'{0:.3f}'})
         for step, data in enumerate(pbar):
-            img_src, lbl_src, img_tgt, lbl_tgt, meta = [d.to(device) for d in data]
+            img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
+            meta = data[4]
 
             model_pred = model(img_src, lbl_src, img_tgt)
             lbl_pred = model_pred.sigmoid()

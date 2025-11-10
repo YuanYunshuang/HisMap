@@ -34,7 +34,7 @@ TRAIN:
 TEST:
   num_notions: 30
   num_src: 7
-  data_info: pairing_train_test_intercls.json
+  data_info: pairing_train_train_intercls.json
   data_keywords: kitti
   checkpoint: syntra/logs/syntra_kitti/model_latest.pth
   save_result: true

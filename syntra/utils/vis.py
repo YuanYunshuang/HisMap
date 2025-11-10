@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from torch.nn import functional as F
 import numpy as np
 import cv2
+from functools import partial
 
 
 color_map = {
@@ -92,7 +93,7 @@ def rgb_img_to_gray_med_img(rgb_array, normalize=True, to_uint8=True):
     return img
 
 
-def overlay_masks_on_image(image, tgt_name, alpha=0.5):    
+def overlay_masks_on_image(image, tgt_name, alpha=0.5, colors=None):    
     """
     Overlay segmentation masks on an image.
 
@@ -106,26 +107,27 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
     num_masks = alpha.shape[0]
 
     # Determine color map based on tgt_name
-    if 'hameln' in tgt_name:
-        colors = color_map['hameln']
-    elif 'bayern' in tgt_name:
-        colors = color_map['bayern']
-    elif 'railway' in tgt_name:
-        colors = color_map['siegfried.railway']
-    elif 'vineyard' in tgt_name:
-        colors = color_map['siegfried.vineyard']
-    elif 'oem' in tgt_name:
-        colors = color_map['oem']
-    elif 'chaos' in tgt_name:
-        colors = color_map['chaos']
-        overlaid_image = rgb_img_to_gray_med_img(overlaid_image)
-    elif 'trees' in tgt_name:
-        colors = color_map['trees']
-    elif 'facies.f3' in tgt_name:
-        colors = color_map['facies.f3']
-    else:
-        # Default to random colors if no specific mapping found
-        colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]
+    if colors is None:
+        if 'hameln' in tgt_name:
+            colors = color_map['hameln']
+        elif 'bayern' in tgt_name:
+            colors = color_map['bayern']
+        elif 'railway' in tgt_name:
+            colors = color_map['siegfried.railway']
+        elif 'vineyard' in tgt_name:
+            colors = color_map['siegfried.vineyard']
+        elif 'oem' in tgt_name:
+            colors = color_map['oem']
+        elif 'chaos' in tgt_name:
+            colors = color_map['chaos']
+            overlaid_image = rgb_img_to_gray_med_img(overlaid_image)
+        elif 'trees' in tgt_name:
+            colors = color_map['trees']
+        elif 'facies.f3' in tgt_name:
+            colors = color_map['facies.f3']
+        else:
+            # Default to random colors if no specific mapping found
+            colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]
 
     if len(colors) == num_masks - 1:
         # add background color
@@ -139,7 +141,8 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
     return overlaid_image
 
 
-def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, rescale=0.5):
+def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, rescale=0.5, colors=None):
+    overlay_func = partial(overlay_masks_on_image, colors=colors)
     B, T, _, H, W = img_src.shape
     N = lbl_src.shape[2]
 
@@ -168,14 +171,14 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, r
                 img_src[i, t] = rgb_img_to_gray_med_img(img_src[i, t])
             row1.append(img_src[i, t])
             row1.append(midbar)
-            overlayed_img = overlay_masks_on_image(img_src[i, t], names[i], alpha=lbl_src[i, t] * 0.5)
+            overlayed_img = overlay_func(img_src[i, t], names[i], alpha=lbl_src[i, t] * 0.5)
             row2.append(overlayed_img)
             row2.append(midbar)
         if 'chaos' in names[i]:
             img_tgt[i] = rgb_img_to_gray_med_img(img_tgt[i])
         row1.append(img_tgt[i])
         row1.append(midbar)
-        overlayed_tgt_img = overlay_masks_on_image(img_tgt[i], names[i], alpha=lbl_tgt[i] * 0.5)
+        overlayed_tgt_img = overlay_func(img_tgt[i], names[i], alpha=lbl_tgt[i] * 0.5)
         row2.append(overlayed_tgt_img)
         row2.append(midbar)
 
@@ -188,9 +191,9 @@ def save_results(out_dir, img_src, lbl_src, img_tgt, lbl_tgt, pred_tgt, names, r
         for n in range(N):
             pred[n] = (pred_inds == n + 1)
 
-        overlayed_pred_prob_img = overlay_masks_on_image(img_tgt[i], names[i], alpha=pred_prob_norm)
+        overlayed_pred_prob_img = overlay_func(img_tgt[i], names[i], alpha=pred_prob_norm)
         row1.append(overlayed_pred_prob_img)
-        overlayed_pred_img = overlay_masks_on_image(img_tgt[i],  names[i], alpha=pred * 0.5)
+        overlayed_pred_img = overlay_func(img_tgt[i],  names[i], alpha=pred * 0.5)
         row2.append(overlayed_pred_img)
 
         row1 = np.concatenate(row1, axis=1)[..., ::-1]

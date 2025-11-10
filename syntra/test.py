@@ -122,8 +122,7 @@ def single_test(num_notions, fixed_src_cls, args, device, model, seg_loss, ce_lo
         # pbar.set_postfix({'Progress': f'0/{num_samples}', 'Loss': f'{0:.6f}',
         #                   'IoU': f'{0:.3f}', 'Precision': f'{0:.3f}', 'Recall': f'{0:.3f}'})
         for step, data in enumerate(pbar):
-            img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
-            meta = data[4]
+            img_src, lbl_src, img_tgt, lbl_tgt, meta = [d.to(device) for d in data]
 
             model_pred = model(img_src, lbl_src, img_tgt)
             lbl_pred = model_pred.sigmoid()
@@ -134,8 +133,11 @@ def single_test(num_notions, fixed_src_cls, args, device, model, seg_loss, ce_lo
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
             if args.save_result:
+                cur_dataset = meta[0]['tgt_name'].rsplit('.')[0]
+                colors = list(test_dataset.label_colors[cur_dataset].values())
                 save_results(os.path.join(out_dir, f"{str(args.data_keywords)}"), 
-                                img_src, lbl_src, img_tgt, lbl_tgt, model_pred, [x['tgt_name'] for x in meta])
+                                img_src, lbl_src, img_tgt, lbl_tgt, model_pred, 
+                                [x['tgt_name'] for x in meta], colors=colors)
             losses.append(loss.item())
 
     avg_loss = np.array(losses).mean()

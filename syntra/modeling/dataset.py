@@ -280,7 +280,7 @@ class SynTraDataset(Dataset):
             with open(os.path.join(self.data_root, ds, f"{ds}.json")) as f:
                 self.label_ratios.update(json.load(f))
             with open(os.path.join(self.data_root, ds, f"color_map.json")) as f:
-                self.label_colors[ds] = json.load(f)
+                self.label_colors[ds] = {k: v for k, v in json.load(f).items() if k not in self.INVALID_CLS}
             if os.path.isfile(os.path.join(self.data_root, ds, "meta_info.json")):
                 with open(os.path.join(self.data_root, ds, "meta_info.json")) as f:
                     self.meta_info[ds] = json.load(f)

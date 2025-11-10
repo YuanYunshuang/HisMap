@@ -105,7 +105,7 @@ def parse_args():
     args = parser.parse_args()
 
     initialize_config_module(config_module="syntra.configs", version_base=None)
-    cfg = compose(config_name=args.config)
+    cfg = compose(config_name=args.config)['TRAIN']
 
     # Override args with cfg arguments
     for key, value in cfg.items():

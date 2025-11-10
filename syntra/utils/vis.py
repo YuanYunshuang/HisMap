@@ -53,6 +53,15 @@ color_map = {
         (236, 57, 174),
         (123, 123,123),
         (21, 96,  150),       
+    ],
+    'facies.f3': [
+    [75, 159, 225],
+    [87, 199, 133],
+    [255, 209, 102],
+    [242, 142, 43],
+    [225, 87, 89],
+    [175, 122, 161],
+    [106, 76, 147]
     ]
 }
 
@@ -112,6 +121,8 @@ def overlay_masks_on_image(image, tgt_name, alpha=0.5):
         overlaid_image = rgb_img_to_gray_med_img(overlaid_image)
     elif 'trees' in tgt_name:
         colors = color_map['trees']
+    elif 'facies.f3' in tgt_name:
+        colors = color_map['facies.f3']
     else:
         # Default to random colors if no specific mapping found
         colors = [(np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256)) for _ in range(num_masks)]

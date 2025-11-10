@@ -22,6 +22,7 @@ from syntra.modeling.dataset import get_dataset
 from syntra.modeling import build_segmentation_model
 from syntra.tools.eval import Evaluator
 from syntra.utils.debug_utils import *
+from hydra import compose, initialize_config_module
 
 # set seeds
 torch.manual_seed(2023)
@@ -41,12 +42,12 @@ def setup_parser():
     cur_path = os.path.abspath(os.path.dirname(__file__))
     parser = argparse.ArgumentParser()
     
-    parser.add_argument("-w", "--checkpoint", type=str, default=f"syntra/logs/try1/mapsam_model_latest.pth")
+    parser.add_argument("--config", type=str, required=True, help="path to config file")
+    parser.add_argument("-w", "--checkpoint", type=str, help="path to model checkpoint")
     parser.add_argument("-o","--output_dir", type=str)
     parser.add_argument("-nw", "--num_workers", type=int, default=4)
     parser.add_argument("-bs", "--batch_size", type=int, default=16)
     parser.add_argument("-s", "--save-result", action="store_true", default=True)
-    parser.add_argument("--sam-ckpt", type=str, default=f"{cur_path}/../model_zoo/sam/sam_vit_b_01ec64.pth")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--debug", action="store_true", default=False)
     # model
@@ -56,19 +57,32 @@ def setup_parser():
     parser.add_argument("--prompt-encoder", type=str, default="example", help="prompt encoder type: example, notion")
     parser.add_argument("--mask-decoder", type=str, default="default", help="mask decoder type: default, highres")
     # dataset
-    parser.add_argument("-d", "--root-dir", type=str, required=True, help="path to training dataset; two subfolders: lbls and imgs")
+    parser.add_argument("-d", "--root-dir", type=str, default=None, help="path to training dataset; two subfolders: lbls and imgs")
     parser.add_argument("-dkw", "--data-keywords", type=str, default=None, help='dataset key words for filtering')
     parser.add_argument("--dataset-name", type=str, default='syntra')
     parser.add_argument("--data-info", type=str, default="pairing_train_100shot_test_intercls.json")
     parser.add_argument("--src-data-info", type=str, default="pairing_train_100shot_train_100shot_intercls.json")
     parser.add_argument("--num-src", type=int, default=1, help="number of source images")
+    parser.add_argument("--num-notions", type=int, default=1, help="number of notions")
     parser.add_argument("-fg", "--foreground-ratio", type=float, default=0.1)
     args = parser.parse_args()
+
+    initialize_config_module(config_module="syntra.configs", version_base=None)
+    cfg = compose(config_name=args.config)
+
+    # Override args with traincfg arguments
+    for key, value in cfg['TRAIN'].items():
+        if hasattr(args, key):
+            setattr(args, key, value)
+    # Override args with test cfg arguments
+    for key, value in cfg['TEST'].items():
+        if hasattr(args, key):
+            setattr(args, key, value)
 
     return args
 
 
-def single_test(num_notions, fixed_src_cls, args, device, mapsam, seg_loss, ce_loss, logger, out_dir):
+def single_test(num_notions, fixed_src_cls, args, device, model, seg_loss, ce_loss, logger, out_dir):
     if args.save_result:
         from syntra.utils.vis import save_results
     if args.debug:
@@ -99,7 +113,7 @@ def single_test(num_notions, fixed_src_cls, args, device, mapsam, seg_loss, ce_l
 
     evaluator = [Evaluator() for _ in range(num_notions)]
 
-    title = f"Testing {args.keywords} {'' if fixed_src_cls is None else fixed_src_cls}"
+    title = f"Testing {args.data_keywords} {'' if fixed_src_cls is None else fixed_src_cls}"
     title = ">" * 20 + title + "<" * 20
     logger.info(title)
     print(title)
@@ -111,17 +125,17 @@ def single_test(num_notions, fixed_src_cls, args, device, mapsam, seg_loss, ce_l
             img_src, lbl_src, img_tgt, lbl_tgt = [d.to(device) for d in data[:4]]
             meta = data[4]
 
-            mapsam_pred = mapsam(img_src, lbl_src, img_tgt)
-            lbl_pred = mapsam_pred.sigmoid()
-            loss = (seg_loss(mapsam_pred, lbl_tgt.unsqueeze(2)) +
-                    ce_loss(mapsam_pred, lbl_tgt.float().unsqueeze(2)))
+            model_pred = model(img_src, lbl_src, img_tgt)
+            lbl_pred = model_pred.sigmoid()
+            loss = (seg_loss(model_pred, lbl_tgt.unsqueeze(2)) +
+                    ce_loss(model_pred, lbl_tgt.float().unsqueeze(2)))
             for i in range(num_notions):
                 evaluator[i].add_sample(lbl_pred.squeeze(2)[:, i], lbl_tgt[:, i])
 
             pbar.set_postfix({ 'Loss': f'{loss:.6f}'})
             if args.save_result:
-                save_results(os.path.join(out_dir, f"{str(args.keywords)}"), 
-                                img_src, lbl_src, img_tgt, lbl_tgt, mapsam_pred, [x['tgt_name'] for x in meta])
+                save_results(os.path.join(out_dir, f"{str(args.data_keywords)}"), 
+                                img_src, lbl_src, img_tgt, lbl_tgt, model_pred, [x['tgt_name'] for x in meta])
             losses.append(loss.item())
 
     avg_loss = np.array(losses).mean()
@@ -179,12 +193,12 @@ def main():
         # num_notions = {'medical': 3}
         # num_notions = {'landcover_selection': 8}
         # num_notions = {'chaos': 4}
-        num_notions = {'trees': 11}
+        # num_notions = {'trees': 11}
         fixed_src_cls = None
-        for kw, n in num_notions.items():
-            args.keywords = kw
-            eval_res = single_test(n, fixed_src_cls, args, device, model, seg_loss, ce_loss, logger, out_dir)
-            eval_results.extend([torch.stack(x, dim=0) for x in eval_res])
+        # for kw, n in num_notions.items():
+        # args.keywords = kw
+        eval_res = single_test(args.num_notions, fixed_src_cls, args, device, model, seg_loss, ce_loss, logger, out_dir)
+        eval_results.extend([torch.stack(x, dim=0) for x in eval_res])
     elif args.dataset_name == 'smol':
         num_notions = 1
         fixed_src_cls = {
